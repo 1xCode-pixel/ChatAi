@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Chat (HuggingFace)</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
+    #chat { border: 1px solid #ccc; padding: 15px; height: 350px; overflow-y: auto; white-space: pre-wrap; }
+    #input { width: 100%; padding: 10px; margin-top: 10px; }
+    button { padding: 10px 20px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<h2>AI Chat (HuggingFace)</h2>
+
+<div id="chat">Привет! Я — ИИ. Чем могу помочь?\n</div>
+
+<input id="input" placeholder="Введите сообщение...">
+<button onclick="send()">Отправить</button>
+
+<script>
+async function send() {
+  const input = document.getElementById("input");
+  const chat = document.getElementById("chat");
+
+  const userText = input.value.trim();
+  if (!userText) return;
+
+  // добавляем сообщение пользователя
+  chat.textContent += "\nВы: " + userText + "\n";
+  input.value = "";
+
+  // отправляем запрос к HF, модель: flan-t5-small
+  chat.textContent += "ИИ: ...\n";
+
+  try {
+    const response = await fetch(
+      "https://api-inference.huggingface.co/models/google/flan-t5-small",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inputs: userText })
+      }
+    );
+
+    const result = await response.json();
+
+    const answer = result[0]?.generated_text || JSON.stringify(result);
+
+    // обновляем чат
+    chat.textContent = chat.textContent.replace("ИИ: ...", "ИИ: " + answer);
+
+    chat.scrollTop = chat.scrollHeight;
+
+  } catch (error) {
+    chat.textContent += "Ошибка: " + error + "\n";
+  }
+}
+</script>
+
+</body>
+</html>
