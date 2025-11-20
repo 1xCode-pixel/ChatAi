@@ -1,40 +1,410 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>AI Chat (WebLLM)</title>
+  <title>Мой ИИ-сайт без сервера</title>
+
+  <!-- LLM в браузере -->
   <script src="https://unpkg.com/@mlc-ai/web-llm"></script>
+
+  <!-- OCR в браузере -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <!-- Классификация картинок в браузере -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0"></script>
+
+  <style>
+    body {
+      margin: 0;
+      background: #0f172a;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      padding: 12px 20px;
+      border-bottom: 1px solid #1f2937;
+      background: #020617;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .msg {
+      max-width: 80%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      font-size: 14px;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: #2563eb;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.ai {
+      align-self: flex-start;
+      background: #111827;
+      border-bottom-left-radius: 4px;
+    }
+    .msg.system {
+      align-self: center;
+      background: transparent;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    #bottom {
+      border-top: 1px solid #1f2937;
+      padding: 10px;
+      background: #020617;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #input-row {
+      display: flex;
+      gap: 8px;
+    }
+    #input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 14px;
+      outline: none;
+    }
+    #input::placeholder {
+      color: #6b7280;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      color: white;
+      background: #2563eb;
+      white-space: nowrap;
+    }
+    button.secondary {
+      background: #374151;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    #tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .left-tools, .right-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    label.file-label {
+      border-radius: 8px;
+      padding: 6px 10px;
+      background: #111827;
+      border: 1px dashed #374151;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #imageInput {
+      display: none;
+    }
+    #preview {
+      max-width: 120px;
+      max-height: 80px;
+      border-radius: 6px;
+      border: 1px solid #374151;
+      display: none;
+      object-fit: cover;
+    }
+  </style>
 </head>
 <body>
 
-<textarea id="chat" style="width:100%;height:300px;">Привет! Я локальный ИИ.\n</textarea>
-<input id="input" style="width:100%;" placeholder="Введите текст...">
-<button onclick="send()">Отправить</button>
+<header>
+  ИИ-чат без сервера: LLM + Интернет + OCR + Vision прямо в браузере
+</header>
+
+<div id="chat"></div>
+
+<div id="bottom">
+  <div id="input-row">
+    <input id="input" placeholder="Напишите сообщение... (или /web запрос для поиска)">
+    <button id="sendBtn">В чат</button>
+  </div>
+
+  <div id="tools">
+    <div class="left-tools">
+      <button class="secondary" id="webBtn">Поиск в интернете</button>
+      <label class="file-label">
+        📷 Загрузить фото
+        <input type="file" id="imageInput" accept="image/*">
+      </label>
+      <img id="preview" alt="preview">
+    </div>
+    <div class="right-tools">
+      <button class="secondary" id="ocrBtn" disabled>OCR (текст с фото)</button>
+      <button class="secondary" id="visionBtn" disabled>Что на фото</button>
+    </div>
+  </div>
+</div>
 
 <script>
-let model;
+  const chatEl = document.getElementById('chat');
+  const inputEl = document.getElementById('input');
+  const sendBtn = document.getElementById('sendBtn');
+  const webBtn = document.getElementById('webBtn');
+  const imageInput = document.getElementById('imageInput');
+  const previewImg = document.getElementById('preview');
+  const ocrBtn = document.getElementById('ocrBtn');
+  const visionBtn = document.getElementById('visionBtn');
 
-async function init() {
-  model = await webllm.ChatModule.create("Llama-3-8B-Instruct-q4f32_1");
-}
+  let llm = null;
+  let llmReady = false;
+  let mobilenetModel = null;
+  let visionReady = false;
+  let lastImageDataUrl = null;
 
-init();
+  // ----- UI helpers -----
+  function addMessage(role, text) {
+    const div = document.createElement('div');
+    div.classList.add('msg', role);
+    div.textContent = text;
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
 
-async function send() {
-  const chat = document.getElementById("chat");
-  const input = document.getElementById("input");
-  const text = input.value.trim();
-  if (!text || !model) return;
+  function addSystem(text) {
+    addMessage('system', text);
+  }
 
-  chat.value += "Вы: " + text + "\n";
-  input.value = "";
+  // ----- Инициализация моделей -----
+  async function initLLM() {
+    try {
+      addSystem('Загружаю языковую модель (WebLLM)...');
+      llm = await webllm.ChatModule.create("Llama-3-8B-Instruct-q4f32_1");
+      llmReady = true;
+      addSystem('LLM загружена. Можно общаться.');
+    } catch (e) {
+      addSystem('Ошибка загрузки LLM: ' + e);
+    }
+  }
 
-  chat.value += "ИИ: ...\n";
+  async function initVision() {
+    try {
+      addSystem('Загружаю модель для распознавания картинок (MobileNet)...');
+      mobilenetModel = await mobilenet.load();
+      visionReady = true;
+      addSystem('Модель для картинок загружена.');
+    } catch (e) {
+      addSystem('Ошибка загрузки vision-модели: ' + e);
+    }
+  }
 
-  const response = await model.generate(text);
-  
-  chat.value = chat.value.replace("ИИ: ...", "ИИ: " + response);
-}
+  // запускаем всё
+  initLLM();
+  initVision();
+  addMessage('ai', 'Привет! Я локальный ИИ.\n' +
+    'Я умею:\n' +
+    '• отвечать как чат-бот\n' +
+    '• искать в интернете (кнопка «Поиск в интернете» или /web запрос)\n' +
+    '• читать текст с картинок (OCR)\n' +
+    '• определять, что на фото');
+
+  // ----- Логика чата с ИИ -----
+  async function handleChat() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+
+    // если пользователь сам явно пишет /web, идём в интернет
+    if (text.startsWith('/web ')) {
+      addMessage('user', text);
+      const query = text.replace('/web', '').trim();
+      await webSearch(query);
+      return;
+    }
+
+    addMessage('user', text);
+
+    if (!llmReady) {
+      addMessage('ai', 'Модель ещё загружается, подожди немного…');
+      return;
+    }
+
+    const thinkingIndex = addThinking();
+
+    try {
+      const reply = await llm.generate(text);
+      replaceThinking(thinkingIndex, reply);
+    } catch (e) {
+      replaceThinking(thinkingIndex, 'Ошибка при генерации ответа: ' + e);
+    }
+  }
+
+  function addThinking() {
+    const div = document.createElement('div');
+    div.classList.add('msg', 'ai');
+    div.textContent = 'Думаю...';
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return Array.from(chatEl.children).indexOf(div);
+  }
+
+  function replaceThinking(index, text) {
+    const node = chatEl.children[index];
+    if (node) node.textContent = text;
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  // ----- Поиск в интернете (через allOrigins + DuckDuckGo) -----
+  async function webSearch(queryRaw) {
+    const query = queryRaw || inputEl.value.trim();
+    if (!query) return;
+    inputEl.value = '';
+
+    addMessage('user', queryRaw ? '/web ' + query : query);
+
+    const idx = addThinking();
+
+    try {
+      const url = 'https://api.allorigins.win/get?url=' +
+        encodeURIComponent('https://duckduckgo.com/html/?q=' + encodeURIComponent(query));
+
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      const html = data.contents;
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const links = Array.from(doc.querySelectorAll('a.result__a, a.result__a'));
+      let text = 'Вот несколько результатов из интернета по запросу: "' + query + '"\n\n';
+
+      for (let i = 0; i < Math.min(3, links.length); i++) {
+        const a = links[i];
+        const title = a.textContent.trim();
+        const href = a.getAttribute('href');
+        text += (i + 1) + '. ' + title + '\n' + href + '\n\n';
+      }
+
+      if (links.length === 0) {
+        text += 'Не удалось аккуратно разобрать результаты. Возможно, страница изменила разметку.';
+      }
+
+      replaceThinking(idx, text);
+    } catch (e) {
+      replaceThinking(idx, 'Не получилось получить результаты поиска: ' + e);
+    }
+  }
+
+  // ----- Работа с изображениями -----
+  imageInput.addEventListener('change', () => {
+    const file = imageInput.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      lastImageDataUrl = reader.result;
+      previewImg.src = lastImageDataUrl;
+      previewImg.style.display = 'block';
+      ocrBtn.disabled = false;
+      visionBtn.disabled = !visionReady;
+      addSystem('Картинка загружена. Можно нажать OCR или "Что на фото".');
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // OCR
+  async function runOCR() {
+    if (!lastImageDataUrl) {
+      addSystem('Сначала загрузи картинку.');
+      return;
+    }
+    addMessage('user', 'Сделай OCR (распознай текст на картинке)');
+    const idx = addThinking();
+
+    try {
+      const result = await Tesseract.recognize(
+        lastImageDataUrl,
+        'rus+eng',
+        { logger: m => console.log(m) }
+      );
+      const text = (result.data && result.data.text) ? result.data.text.trim() : '';
+      replaceThinking(idx, text ? ('Распознанный текст:\n' + text) : 'Текст не найден или распознан плохо.');
+    } catch (e) {
+      replaceThinking(idx, 'Ошибка OCR: ' + e);
+    }
+  }
+
+  // Классификация: что на фото
+  async function runVision() {
+    if (!lastImageDataUrl) {
+      addSystem('Сначала загрузи картинку.');
+      return;
+    }
+    if (!visionReady) {
+      addSystem('Модель для картинок ещё загружается.');
+      return;
+    }
+
+    addMessage('user', 'Определи, что на фото');
+    const idx = addThinking();
+
+    // грузим картинку во временный <img>
+    const img = new Image();
+    img.src = lastImageDataUrl;
+    img.onload = async () => {
+      try {
+        const predictions = await mobilenetModel.classify(img);
+        let text = 'Предположения модели:\n\n';
+        predictions.slice(0, 3).forEach((p, i) => {
+          text += (i + 1) + '. ' + p.className + ' (' +
+            Math.round(p.probability * 100) + '%)\n';
+        });
+        replaceThinking(idx, text);
+      } catch (e) {
+        replaceThinking(idx, 'Ошибка распознавания картинки: ' + e);
+      }
+    };
+    img.onerror = () => {
+      replaceThinking(idx, 'Не удалось загрузить картинку для анализа.');
+    };
+  }
+
+  // ----- События -----
+  sendBtn.addEventListener('click', handleChat);
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleChat();
+    }
+  });
+  webBtn.addEventListener('click', () => webSearch());
+  ocrBtn.addEventListener('click', runOCR);
+  visionBtn.addEventListener('click', runVision);
 </script>
 
 </body>
