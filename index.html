@@ -1,64 +1,41 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>AI Chat (Working HF Space)</title>
-  <style>
-    body { font-family: Arial; max-width: 600px; margin: 40px auto; }
-    #chat { 
-      border: 1px solid #ccc; 
-      padding: 10px; 
-      height: 350px; 
-      overflow-y: auto; 
-      white-space: pre-line;
-    }
-    #input { width: 100%; padding: 10px; margin-top: 10px; }
-    button { padding: 10px 20px; margin-top: 10px; }
-  </style>
+  <title>AI Chat (WebLLM)</title>
+  <script src="https://unpkg.com/@mlc-ai/web-llm"></script>
 </head>
 <body>
 
-<h2>AI Chat</h2>
-
-<div id="chat">Привет! Я — ИИ. Чем могу помочь?</div>
-
-<input id="input" placeholder="Введите сообщение...">
+<textarea id="chat" style="width:100%;height:300px;">Привет! Я локальный ИИ.\n</textarea>
+<input id="input" style="width:100%;" placeholder="Введите текст...">
 <button onclick="send()">Отправить</button>
 
 <script>
+let model;
+
+async function init() {
+  model = await webllm.ChatModule.create("Llama-3-8B-Instruct-q4f32_1");
+}
+
+init();
+
 async function send() {
-  const user = document.getElementById("input").value;
   const chat = document.getElementById("chat");
-  document.getElementById("input").value = "";
+  const input = document.getElementById("input");
+  const text = input.value.trim();
+  if (!text || !model) return;
 
-  if (!user.trim()) return;
+  chat.value += "Вы: " + text + "\n";
+  input.value = "";
 
-  chat.textContent += "\n\nВы: " + user;
-  chat.textContent += "\nИИ: ...";
+  chat.value += "ИИ: ...\n";
 
-  try {
-    const response = await fetch(
-      "https://bespoke-model-api.hf.space/run/predict",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: [user] })
-      }
-    );
-
-    const result = await response.json();
-    const answer = result.data[0];
-
-    // заменяем "ИИ: ..." на ответ
-    chat.textContent = chat.textContent.replace("ИИ: ...", "ИИ: " + answer);
-    chat.scrollTop = chat.scrollHeight;
-
-  } catch (e) {
-    chat.textContent += "\nОшибка: " + e;
-  }
+  const response = await model.generate(text);
+  
+  chat.value = chat.value.replace("ИИ: ...", "ИИ: " + response);
 }
 </script>
 
 </body>
 </html>
-
