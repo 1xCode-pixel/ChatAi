@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>ChatAi — Qwen2.5-Instruct + Фото</title>
+  <title>ChatAi — Qwen2.5-Instruct + Фото (Yandex)</title>
 
   <!-- OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-  <!-- Vision -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0"></script>
+  <!-- Vision (TFJS + MobileNet, UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+
+  <!-- Transformers.js UMD -->
+  <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"></script>
 
   <style>
     :root { color-scheme: dark light; }
@@ -216,66 +219,58 @@
   </div>
 </div>
 
-<script type="module">
-  import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+<script>
+  // ========= ПЕРЕМЕННЫЕ И ЭЛЕМЕНТЫ =========
+  var body = document.body;
+  var chatEl = document.getElementById("chat");
+  var inputEl = document.getElementById("input");
+  var sendBtn = document.getElementById("sendBtn");
+  var micBtn = document.getElementById("micBtn");
+  var webBtn = document.getElementById("webBtn");
+  var imageInput = document.getElementById("imageInput");
+  var previewImg = document.getElementById("preview");
+  var ocrBtn = document.getElementById("ocrBtn");
+  var visionBtn = document.getElementById("visionBtn");
+  var clearBtn = document.getElementById("clearBtn");
+  var themeToggleBtn = document.getElementById("themeToggle");
 
-  // чтобы не искать локальные веса
-  env.allowLocalModels = false;
+  var generator = null;       // LLM pipeline
+  var llmReady = false;
+  var visionModel = null;
+  var visionReady = false;
+  var lastImageDataUrl = null;
+  var recognition = null;
+  var speechAvailable = false;
 
-  // ЭЛЕМЕНТЫ
-  const body = document.body;
-  const chatEl = document.getElementById("chat");
-  const inputEl = document.getElementById("input");
-  const sendBtn = document.getElementById("sendBtn");
-  const micBtn = document.getElementById("micBtn");
-  const webBtn = document.getElementById("webBtn");
-  const imageInput = document.getElementById("imageInput");
-  const previewImg = document.getElementById("preview");
-  const ocrBtn = document.getElementById("ocrBtn");
-  const visionBtn = document.getElementById("visionBtn");
-  const clearBtn = document.getElementById("clearBtn");
-  const themeToggleBtn = document.getElementById("themeToggle");
+  var chatHistory = []; // {role: 'user'|'ai'|'system', text: string}
+  var HISTORY_KEY = "chat_history_chatAi_qwen25_yandex_v1";
+  var THEME_KEY   = "chat_theme_chatAi_v1";
 
-  // СОСТОЯНИЕ
-  let generator = null;
-  let llmReady = false;
-  let visionModel = null;
-  let visionReady = false;
-  let lastImageDataUrl = null;
-  let recognition = null;
-  let speechAvailable = false;
+  var IMAGE_KEYWORDS = ["номер","текст","на фото","на картинке","на изображении","найди"];
 
-  let chatHistory = []; // {role: 'user'|'ai'|'system', text: string}
-  const HISTORY_KEY = "chat_history_chatAi_qwen25_v2";
-  const THEME_KEY   = "chat_theme_chatAi_v1";
+  var SYSTEM_PROMPT = (
+"Ты — ChatAi. Дружелюбный, вежливый и умный русскоязычный ИИ-ассистент.\n\n" +
+"Если тебя спрашивают:\n" +
+'- "кто тебя создал?"\n' +
+'- "кто твой разработчик?"\n' +
+'- "кто тебя сделал?"\n' +
+'- "кем ты был создан?"\n' +
+'- "кто создал ChatAi?"\n' +
+"и любые похожие вопросы про создателей,\n\n" +
+'ты ВСЕГДА отвечаешь:\n"Меня создала маленькая команда из 1 программиста, 1 дизайнера и одного менеджера — команда 1xCode."\n\n' +
+"Никогда не упоминай OpenAI, Meta, Microsoft, Google, HuggingFace, transformers или других разработчиков.\n" +
+"Всегда называй себя только ChatAi.\n" +
+"Отвечай кратко и по делу, по-русски."
+  );
 
-  const IMAGE_KEYWORDS = ["номер","текст","на фото","на картинке","на изображении","найди"];
+  // ========= ИСТОРИЯ / ВЫВОД =========
+  function addMessage(role, rawText, save) {
+    if (save === undefined) save = true;
 
-  const SYSTEM_PROMPT = `
-Ты — ChatAi. Дружелюбный, вежливый и умный русскоязычный ИИ-ассистент.
-
-Если тебя спрашивают:
-- "кто тебя создал?"
-- "кто твой разработчик?"
-- "кто тебя сделал?"
-- "кем ты был создан?"
-- "кто создал ChatAi?"
-и любые похожие вопросы про создателей,
-
-ты ВСЕГДА отвечаешь:
-"Меня создала маленькая команда из 1 программиста, 1 дизайнера и одного менеджера — команда 1xCode."
-
-Никогда не упоминай OpenAI, Meta, Microsoft, Google, HuggingFace, transformers или других разработчиков.
-Всегда называй себя только ChatAi.
-Отвечай кратко и по делу, по-русски.
-`.trim();
-
-  // ===== ИСТОРИЯ / ВЫВОД =====
-  function addMessage(role, rawText, save = true) {
-    const div = document.createElement("div");
+    var div = document.createElement("div");
     div.classList.add("msg", role);
 
-    let displayText = rawText;
+    var displayText = rawText;
     if (role === "ai")   displayText = "ChatAi: " + rawText;
     if (role === "user") displayText = "Вы: " + rawText;
     if (role === "system") displayText = rawText;
@@ -285,61 +280,94 @@
     chatEl.scrollTop = chatEl.scrollHeight;
 
     if (save) {
-      chatHistory.push({ role, text: rawText });
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      chatHistory.push({ role: role, text: rawText });
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      } catch (e) {
+        // если даже localStorage сломается — покажем в чат
+        addMessage("system", "Ошибка сохранения истории: " + e, false);
+      }
     }
   }
 
-  function addSystem(text, save = true) {
+  function addSystem(text, save) {
+    if (save === undefined) save = true;
     addMessage("system", text, save);
   }
 
   function loadHistory() {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    var raw = null;
+    try {
+      raw = localStorage.getItem(HISTORY_KEY);
+    } catch (e) {
+      addSystem("Ошибка чтения истории: " + e, false);
+      return;
+    }
     if (!raw) return;
     try {
-      const arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) return;
+      var arr = JSON.parse(raw);
+      if (!arr || !arr.length) return;
       chatHistory = arr;
-      arr.forEach(m => addMessage(m.role, m.text, false));
-    } catch {
-      // даже ошибку парсинга показываем в чат
-      addSystem("Ошибка восстановления истории чата.");
+      for (var i = 0; i < arr.length; i++) {
+        var m = arr[i];
+        addMessage(m.role, m.text, false);
+      }
+    } catch (e2) {
+      addSystem("Ошибка восстановления истории: " + e2, false);
     }
   }
 
   function clearHistory() {
-    if (!confirm("Очистить чат? Историю нельзя будет восстановить.")) return;
+    var ok = confirm("Очистить чат? Историю нельзя будет восстановить.");
+    if (!ok) return;
     chatHistory = [];
-    localStorage.removeItem(HISTORY_KEY);
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+    } catch (e) {
+      addSystem("Ошибка очистки истории: " + e, false);
+    }
     chatEl.innerHTML = "";
     addSystem("Чат очищен. История удалена навсегда.");
   }
+
   clearBtn.addEventListener("click", clearHistory);
 
-  // ===== ТЕМА =====
+  // ========= ТЕМА =========
   function applyTheme(theme) {
     body.classList.remove("dark","light");
     body.classList.add(theme);
-    themeToggleBtn.textContent = theme === "dark" ? "☀️" : "🌙";
-    localStorage.setItem(THEME_KEY, theme);
+    themeToggleBtn.textContent = (theme === "dark" ? "☀️" : "🌙");
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch (e) {
+      addSystem("Ошибка сохранения темы: " + e, false);
+    }
   }
+
   function initTheme() {
-    let saved = localStorage.getItem(THEME_KEY);
+    var saved = null;
+    try {
+      saved = localStorage.getItem(THEME_KEY);
+    } catch (e) {}
+
     if (!saved) {
-      const prefersDark =
-        window.matchMedia &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      var prefersDark = false;
+      if (window.matchMedia) {
+        try {
+          prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        } catch (e) {}
+      }
       saved = prefersDark ? "dark" : "light";
     }
     applyTheme(saved);
-    themeToggleBtn.addEventListener("click", () => {
-      const current = body.classList.contains("dark") ? "dark" : "light";
+
+    themeToggleBtn.addEventListener("click", function () {
+      var current = body.classList.contains("dark") ? "dark" : "light";
       applyTheme(current === "dark" ? "light" : "dark");
     });
   }
 
-  // ===== БЛОКИРОВКА ВВОДА =====
+  // ========= БЛОКИРОВКА ВВОДА =========
   function blockInput() {
     inputEl.disabled = true;
     sendBtn.disabled = true;
@@ -348,6 +376,7 @@
     visionBtn.disabled = true;
     micBtn.disabled  = true;
   }
+
   function unblockInput() {
     inputEl.disabled = false;
     sendBtn.disabled = false;
@@ -359,106 +388,156 @@
     }
   }
 
-  // ===== LLM (Qwen2.5-0.5B-Instruct quantized) =====
+  // ========= LLM: Qwen2.5-0.5B-Instruct (quantized) =========
   function buildPrompt(userTextWithExtra) {
-    let prompt = SYSTEM_PROMPT + "\n\nДиалог:\n";
-    for (const m of chatHistory) {
+    var prompt = SYSTEM_PROMPT + "\n\nДиалог:\n";
+    for (var i = 0; i < chatHistory.length; i++) {
+      var m = chatHistory[i];
       if (m.role === "user") {
-        prompt += `Пользователь: ${m.text}\n`;
+        prompt += "Пользователь: " + m.text + "\n";
       } else if (m.role === "ai") {
-        prompt += `ChatAi: ${m.text}\n`;
+        prompt += "ChatAi: " + m.text + "\n";
       }
     }
-    prompt += `Пользователь: ${userTextWithExtra}\nChatAi:`;
+    prompt += "Пользователь: " + userTextWithExtra + "\nChatAi:";
     return prompt;
   }
 
-  async function initLLM() {
+  function initLLM() {
     addSystem("ChatAi загружается…");
-    addSystem("Загружаю модель Qwen2.5-0.5B-Instruct (квантизированную). Это может занять немного времени…");
+    addSystem("Загружаю модель Qwen2.5-0.5B-Instruct (quantized)…");
+
+    if (!window.transformers || !window.transformers.pipeline) {
+      addSystem("Ошибка: библиотека transformers.js не загрузилась.");
+      return;
+    }
+
+    // отключаем локальные модели
     try {
-      generator = await pipeline("text-generation", "Xenova/Qwen2.5-0.5B-Instruct", {
-        quantized: true,
-      });
+      window.transformers.env.allowLocalModels = false;
+    } catch (e) {}
+
+    window.transformers.pipeline("text-generation", "Xenova/Qwen2.5-0.5B-Instruct", {
+      quantized: true
+    }).then(function (pipe) {
+      generator = pipe;
       llmReady = true;
       inputEl.placeholder = "Напишите сообщение для ChatAi...";
       unblockInput();
       addMessage("ai", "Привет! Я ChatAi — твой ИИ-ассистент. Модель загружена, можно общаться!");
-    } catch (e) {
+    }).catch(function (e) {
       addSystem("Ошибка загрузки модели: " + e);
-    }
+    });
   }
 
-  async function generateAnswer(rawUserText, extra = "") {
-    const combined = extra ? `${rawUserText}\n\n${extra}` : rawUserText;
-    const prompt = buildPrompt(combined);
-    const out = await generator(prompt, {
+  function generateAnswer(rawUserText, extra, onDone) {
+    if (!generator) {
+      onDone("Ошибка: модель не инициализирована.");
+      return;
+    }
+    if (extra === undefined || extra === null) extra = "";
+    var combined = extra ? (rawUserText + "\n\n" + extra) : rawUserText;
+    var prompt = buildPrompt(combined);
+
+    generator(prompt, {
       max_new_tokens: 160,
       temperature: 0.7,
-      top_p: 0.9,
+      top_p: 0.9
+    }).then(function (out) {
+      var full = "";
+      if (out && out[0] && out[0].generated_text) {
+        full = out[0].generated_text;
+      }
+
+      var idx = full.lastIndexOf("ChatAi:");
+      var answer = (idx !== -1) ? full.slice(idx + "ChatAi:".length) : full;
+      answer = (answer || "").replace(/^\s+|\s+$/g, "");
+      if (!answer) answer = "Не знаю, что ответить.";
+      onDone(answer);
+    }).catch(function (e) {
+      onDone("Ошибка генерации ответа: " + e);
     });
-    const full = out[0]?.generated_text || "";
-    const idx = full.lastIndexOf("ChatAi:");
-    let answer = idx !== -1 ? full.slice(idx + "ChatAi:".length) : full;
-    return answer.trim() || "Не знаю, что ответить.";
   }
 
-  // ===== VISION =====
-  async function initVision() {
-    try {
-      addSystem("Подключаю анализ изображений (MobileNet)…", false);
-      visionModel = await mobilenet.load();
+  // ========= VISION =========
+  function initVision() {
+    if (!window.mobilenet) {
+      addSystem("Ошибка: библиотека mobilenet не загрузилась.");
+      return;
+    }
+    addSystem("Подключаю анализ изображений (MobileNet)…", false);
+    window.mobilenet.load().then(function (model) {
+      visionModel = model;
       visionReady = true;
       addSystem("Модель распознавания изображений подключена.", false);
       if (lastImageDataUrl) visionBtn.disabled = false;
-    } catch (e) {
+    }).catch(function (e) {
       addSystem("Ошибка загрузки vision-модели: " + e, true);
-    }
+    });
   }
 
-  // ===== WEB SEARCH =====
-  async function webSearch(qRaw) {
-    const q = qRaw || inputEl.value.trim();
+  // ========= WEB SEARCH =========
+  function webSearch(qRaw) {
+    var q = qRaw || inputEl.value.trim();
     if (!q) return;
     inputEl.value = "";
 
     addMessage("user", q);
     addMessage("ai", "Секунду, ищу информацию в интернете…");
 
-    try {
-      const url = "https://api.allorigins.win/get?url=" +
-        encodeURIComponent("https://duckduckgo.com/html/?q=" + encodeURIComponent(q));
-      const resp = await fetch(url);
-      const data = await resp.json();
+    var url = "https://api.allorigins.win/get?url=" +
+      encodeURIComponent("https://duckduckgo.com/html/?q=" + encodeURIComponent(q));
 
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(data.contents, "text/html");
-      const links = Array.from(doc.querySelectorAll("a.result__a"));
+    fetch(url).then(function (resp) {
+      return resp.json();
+    }).then(function (data) {
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(data.contents, "text/html");
+      var links = doc.querySelectorAll("a.result__a");
 
-      let text = `Нашёл вот что по запросу "${q}":\n\n`;
-      for (let i = 0; i < Math.min(3, links.length); i++) {
-        const a = links[i];
-        text += `${i + 1}. ${a.textContent.trim()}\n${a.href}\n\n`;
+      var text = "Нашёл вот что по запросу \"" + q + "\":\n\n";
+      var count = Math.min(3, links.length);
+      for (var i = 0; i < count; i++) {
+        var a = links[i];
+        text += (i + 1) + ". " + a.textContent.trim() + "\n" + a.href + "\n\n";
       }
-      if (links.length === 0) {
+      if (count === 0) {
         text += "Не удалось извлечь результаты (разметка страницы могла измениться).";
       }
 
-      chatHistory[chatHistory.length - 1].text = text;
-      chatEl.lastChild.textContent = "ChatAi: " + text;
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-    } catch (e) {
-      const err = "Ошибка поиска: " + e;
-      chatHistory[chatHistory.length - 1].text = err;
-      chatEl.lastChild.textContent = "ChatAi: " + err;
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-    }
+      // заменить последнюю фразу ChatAi
+      if (chatHistory.length > 0) {
+        chatHistory[chatHistory.length - 1].text = text;
+        var last = chatEl.lastChild;
+        if (last && last.classList && last.classList.contains("ai")) {
+          last.textContent = "ChatAi: " + text;
+        }
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+        } catch (e) {}
+      }
+    }).catch(function (e) {
+      var err = "Ошибка поиска: " + e;
+      if (chatHistory.length > 0) {
+        chatHistory[chatHistory.length - 1].text = err;
+        var last = chatEl.lastChild;
+        if (last && last.classList && last.classList.contains("ai")) {
+          last.textContent = "ChatAi: " + err;
+        }
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+        } catch (e2) {}
+      }
+    });
   }
-  webBtn.addEventListener("click", () => webSearch());
 
-  // ===== ГОЛОС =====
+  webBtn.addEventListener("click", function () {
+    webSearch();
+  });
+
+  // ========= ГОЛОС =========
   function initSpeech() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       addSystem("Голосовой ввод не поддерживается этим браузером.", false);
       micBtn.style.display = "none";
@@ -469,32 +548,33 @@
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
-    recognition.onresult = (e) => {
-      const text = e.results[0][0].transcript;
+    recognition.onresult = function (e) {
+      var text = e.results[0][0].transcript;
       inputEl.value = text;
     };
-    recognition.onerror = (e) => {
+    recognition.onerror = function (e) {
       addSystem("Ошибка голосового ввода: " + e.error, false);
     };
 
     speechAvailable = true;
   }
-  micBtn.addEventListener("click", () => {
+
+  micBtn.addEventListener("click", function () {
     if (!recognition) return;
     try {
       recognition.start();
       addSystem("ChatAi слушает…", false);
-    } catch {
-      addSystem("Не удалось запустить голосовой ввод.", false);
+    } catch (e) {
+      addSystem("Не удалось запустить голосовой ввод: " + e, false);
     }
   });
 
-  // ===== ИЗОБРАЖЕНИЯ / OCR / VISION =====
-  imageInput.addEventListener("change", () => {
-    const file = imageInput.files[0];
+  // ========= ИЗОБРАЖЕНИЯ / OCR / VISION =========
+  imageInput.addEventListener("change", function () {
+    var file = imageInput.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
+    var reader = new FileReader();
+    reader.onload = function () {
       lastImageDataUrl = reader.result;
       previewImg.src = lastImageDataUrl;
       previewImg.style.display = "block";
@@ -505,7 +585,7 @@
     reader.readAsDataURL(file);
   });
 
-  async function runOCR() {
+  function runOCR() {
     if (!lastImageDataUrl) {
       addSystem("Сначала загрузи фото.", false);
       return;
@@ -513,152 +593,206 @@
     addMessage("user", "Сделай OCR (прочитай текст на фото)");
     addMessage("ai", "Читаю текст с изображения…");
 
-    try {
-      const result = await Tesseract.recognize(lastImageDataUrl, "rus+eng");
-      const text = result.data && result.data.text ? result.data.text.trim() : "";
-      const answer = text ? "Распознанный текст:\n" + text : "Текст не найден или распознан плохо.";
+    Tesseract.recognize(lastImageDataUrl, "rus+eng").then(function (result) {
+      var text = (result.data && result.data.text) ? result.data.text.replace(/^\s+|\s+$/g,"") : "";
+      var answer = text ? "Распознанный текст:\n" + text : "Текст не найден или распознан плохо.";
       chatHistory[chatHistory.length - 1].text = answer;
-      chatEl.lastChild.textContent = "ChatAi: " + answer;
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-    } catch (e) {
-      const err = "Ошибка OCR: " + e;
+      var last = chatEl.lastChild;
+      if (last && last.classList && last.classList.contains("ai")) {
+        last.textContent = "ChatAi: " + answer;
+      }
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      } catch (e) {}
+    }).catch(function (e) {
+      var err = "Ошибка OCR: " + e;
       chatHistory[chatHistory.length - 1].text = err;
-      chatEl.lastChild.textContent = "ChatAi: " + err;
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-    }
+      var last = chatEl.lastChild;
+      if (last && last.classList && last.classList.contains("ai")) {
+        last.textContent = "ChatAi: " + err;
+      }
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      } catch (e2) {}
+    });
   }
 
-  async function runVision() {
+  function runVision() {
     if (!lastImageDataUrl) {
       addSystem("Сначала загрузи фото.", false);
       return;
     }
-    if (!visionReady) {
+    if (!visionReady || !visionModel) {
       addSystem("Модель для картинок ещё загружается.", false);
       return;
     }
     addMessage("user", "Что на фото?");
     addMessage("ai", "Анализирую изображение…");
 
-    const img = new Image();
+    var img = new Image();
     img.src = lastImageDataUrl;
-    img.onload = async () => {
-      try {
-        const preds = await visionModel.classify(img);
-        let text = "Предположения модели:\n\n";
-        preds.slice(0, 3).forEach((p, i) => {
-          text += `${i + 1}. ${p.className} (${Math.round(p.probability * 100)}%)\n`;
-        });
+    img.onload = function () {
+      visionModel.classify(img).then(function (preds) {
+        var text = "Предположения модели:\n\n";
+        var count = Math.min(3, preds.length);
+        for (var i = 0; i < count; i++) {
+          var p = preds[i];
+          text += (i+1) + ". " + p.className + " (" + Math.round(p.probability*100) + "%)\n";
+        }
         chatHistory[chatHistory.length - 1].text = text;
-        chatEl.lastChild.textContent = "ChatAi: " + text;
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-      } catch (e) {
-        const err = "Ошибка анализа изображения: " + e;
+        var last = chatEl.lastChild;
+        if (last && last.classList && last.classList.contains("ai")) {
+          last.textContent = "ChatAi: " + text;
+        }
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+        } catch (e) {}
+      }).catch(function (e) {
+        var err = "Ошибка анализа изображения: " + e;
         chatHistory[chatHistory.length - 1].text = err;
-        chatEl.lastChild.textContent = "ChatAi: " + err;
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-      }
+        var last = chatEl.lastChild;
+        if (last && last.classList && last.classList.contains("ai")) {
+          last.textContent = "ChatAi: " + err;
+        }
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+        } catch (e2) {}
+      });
     };
-    img.onerror = () => {
-      const err = "Не удалось загрузить картинку для анализа.";
+    img.onerror = function () {
+      var err = "Не удалось загрузить картинку для анализа.";
       chatHistory[chatHistory.length - 1].text = err;
-      chatEl.lastChild.textContent = "ChatAi: " + err;
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      var last = chatEl.lastChild;
+      if (last && last.classList && last.classList.contains("ai")) {
+        last.textContent = "ChatAi: " + err;
+      }
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      } catch (e2) {}
     };
   }
+
   ocrBtn.addEventListener("click", runOCR);
   visionBtn.addEventListener("click", runVision);
 
-  // ===== ЧАТ + «ФОТО + ЧТО ДЕЛАТЬ» =====
-  async function handleSend() {
+  // ========= ЧАТ + «ФОТО + ЧТО ДЕЛАТЬ» =========
+  function handleSend() {
     if (!llmReady) {
       addSystem("ChatAi ещё загружается, подожди немного.", false);
       return;
     }
-    const rawText = inputEl.value.trim();
+    var rawText = inputEl.value.replace(/^\s+|\s+$/g, "");
     if (!rawText) return;
     inputEl.value = "";
 
     addMessage("user", rawText);
 
-    const lower = rawText.toLowerCase();
-    const refersToImage = lastImageDataUrl &&
-      IMAGE_KEYWORDS.some(k => lower.includes(k));
+    var lower = rawText.toLowerCase();
+    var refersToImage = lastImageDataUrl ? false : false;
+    if (lastImageDataUrl) {
+      for (var i = 0; i < IMAGE_KEYWORDS.length; i++) {
+        if (lower.indexOf(IMAGE_KEYWORDS[i]) !== -1) {
+          refersToImage = true;
+          break;
+        }
+      }
+    }
 
     if (refersToImage) {
       addMessage("ai", "Обрабатываю фото и твой запрос…");
 
-      let ocrText = "";
-      try {
-        const res = await Tesseract.recognize(lastImageDataUrl, "rus+eng");
-        ocrText = res.data && res.data.text ? res.data.text.trim() : "";
-      } catch (e) {
-        addSystem("Ошибка OCR при обработке фото: " + e, true);
-      }
+      var ocrText = "";
+      var visionSummary = "";
 
-      let visionSummary = "";
-      if (visionReady) {
-        try {
-          const img = new Image();
-          img.src = lastImageDataUrl;
-          await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-          });
-          const preds = await visionModel.classify(img);
-          visionSummary = preds.slice(0, 3)
-            .map((p, i) => `${i + 1}. ${p.className} (${Math.round(p.probability * 100)}%)`)
-            .join("\n");
-        } catch (e) {
-          addSystem("Ошибка vision при обработке фото: " + e, true);
+      // OCR (best effort)
+      var ocrPromise = Tesseract.recognize(lastImageDataUrl, "rus+eng").then(function (res) {
+        if (res && res.data && res.data.text) {
+          ocrText = res.data.text.replace(/^\s+|\s+$/g,"");
         }
-      }
+      }).catch(function (e) {
+        addSystem("Ошибка OCR при обработке фото: " + e, false);
+      });
 
-      const extra =
-        (ocrText ? "Распознанный текст на изображении:\n" + ocrText + "\n\n" : "") +
-        (visionSummary ? "Распознанные объекты:\n" + visionSummary + "\n\n" : "") +
-        'Если пользователь просит "номер", речь обычно о номере или тексте на картинке.';
+      // Vision (best effort)
+      var visionPromise = new Promise(function (resolve) {
+        if (!visionReady || !visionModel) {
+          resolve();
+          return;
+        }
+        var img = new Image();
+        img.src = lastImageDataUrl;
+        img.onload = function () {
+          visionModel.classify(img).then(function (preds) {
+            var textLines = [];
+            var count = Math.min(3, preds.length);
+            for (var i = 0; i < count; i++) {
+              var p = preds[i];
+              textLines.push((i+1) + ". " + p.className + " (" + Math.round(p.probability*100) + "%)");
+            }
+            visionSummary = textLines.join("\n");
+            resolve();
+          }).catch(function (e2) {
+            addSystem("Ошибка vision при обработке фото: " + e2, false);
+            resolve();
+          });
+        };
+        img.onerror = function () {
+          addSystem("Ошибка: не удалось загрузить изображение для анализа.", false);
+          resolve();
+        };
+      });
 
-      try {
-        const answer = await generateAnswer(rawText, extra);
-        chatHistory[chatHistory.length - 1].text = answer;
-        chatEl.lastChild.textContent = "ChatAi: " + answer;
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-      } catch (e) {
-        const err = "Ошибка ответа ChatAi: " + e;
-        chatHistory[chatHistory.length - 1].text = err;
-        chatEl.lastChild.textContent = "ChatAi: " + err;
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-      }
+      Promise.all([ocrPromise, visionPromise]).then(function () {
+        var extra = "";
+        if (ocrText) {
+          extra += "Распознанный текст на изображении:\n" + ocrText + "\n\n";
+        }
+        if (visionSummary) {
+          extra += "Распознанные объекты:\n" + visionSummary + "\n\n";
+        }
+        extra += 'Если пользователь просит "номер", речь обычно о номере или тексте на картинке.';
+
+        generateAnswer(rawText, extra, function (answer) {
+          chatHistory[chatHistory.length - 1].text = answer;
+          var last = chatEl.lastChild;
+          if (last && last.classList && last.classList.contains("ai")) {
+            last.textContent = "ChatAi: " + answer;
+          }
+          try {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+          } catch (e3) {}
+        });
+      });
+
       return;
     }
 
     // обычный диалог
     addMessage("ai", "Думаю…");
 
-    try {
-      const answer = await generateAnswer(rawText);
+    generateAnswer(rawText, "", function (answer) {
       chatHistory[chatHistory.length - 1].text = answer;
-      chatEl.lastChild.textContent = "ChatAi: " + answer;
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-    } catch (e) {
-      const err = "Ошибка ответа ChatAi: " + e;
-      chatHistory[chatHistory.length - 1].text = err;
-      chatEl.lastChild.textContent = "ChatAi: " + err;
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
-    }
+      var last = chatEl.lastChild;
+      if (last && last.classList && last.classList.contains("ai")) {
+        last.textContent = "ChatAi: " + answer;
+      }
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      } catch (e3) {}
+    });
   }
+
   sendBtn.addEventListener("click", handleSend);
-  inputEl.addEventListener("keydown", (e) => {
+  inputEl.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   });
 
-  // ===== СТАРТ =====
+  // ========= СТАРТ =========
   function initSpeech() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       addSystem("Голосовой ввод не поддерживается этим браузером.", false);
       micBtn.style.display = "none";
@@ -668,31 +802,22 @@
     recognition.lang = "ru-RU";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
-    recognition.onresult = (e) => {
+
+    recognition.onresult = function (e) {
       inputEl.value = e.results[0][0].transcript;
     };
-    recognition.onerror = (e) => {
+    recognition.onerror = function (e) {
       addSystem("Ошибка голосового ввода: " + e.error, false);
     };
     speechAvailable = true;
   }
 
-  micBtn.addEventListener("click", () => {
-    if (!recognition) return;
-    try {
-      recognition.start();
-      addSystem("ChatAi слушает…", false);
-    } catch {
-      addSystem("Не удалось запустить голосовой ввод.", false);
-    }
-  });
-
-  (function start() {
+  function start() {
     initTheme();
     loadHistory();
     blockInput();
 
-    if (chatHistory.length === 0) {
+    if (!chatHistory.length) {
       addSystem("ChatAi загружается…");
       addSystem("Загружаю мозг (Qwen2.5-0.5B-Instruct, quantized) и модули картинок…");
     }
@@ -700,9 +825,11 @@
     initSpeech();
     initLLM();
     initVision();
-  })();
+  }
+
+  // Запуск после полной загрузки страницы
+  window.addEventListener("load", start);
 </script>
 </body>
 </html>
-
 
