@@ -1,211 +1,262 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1"
+  />
 
-<title>AI Chat — Full Mobile Assistant</title>
+  <title>AI Chat — Qwen 0.5B Chat + Фото</title>
 
-<!-- --- ВАЖНО! СТАБИЛЬНЫЙ WebLLM CDN --- -->
-<script src="https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/dist/web-llm.min.js"></script>
+  <!-- OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-<!-- OCR -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <!-- Vision -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0"></script>
 
-<!-- Vision -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0"></script>
+  <style>
+    :root {
+      color-scheme: dark light;
+    }
 
-<style>
-/* ----------------- ТЕМА НА УРОВНЕ CSS ----------------- */
-:root {
-  color-scheme: dark light;
-}
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
 
-/* Тёмная тема */
-body.dark {
-  background: #020617;
-  color: #e5e7eb;
-}
+    body.dark {
+      background: #020617;
+      color: #e5e7eb;
+    }
+    body.light {
+      background: #f3f4f6;
+      color: #111827;
+    }
 
-/* Светлая тема */
-body.light {
-  background: #f3f4f6;
-  color: #111827;
-}
+    header {
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 15px;
+      font-weight: 600;
+      border-bottom: 1px solid #1f2937;
+    }
+    body.light header {
+      background: #e5e7eb;
+      border-bottom-color: #cbd5f5;
+    }
+    body.dark header {
+      background: #020617;
+      border-bottom-color: #1f2937;
+    }
 
-/* Общий стиль */
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
+    #themeToggle {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 18px;
+    }
 
-header {
-  padding: 12px 16px;
-  font-weight: 600;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--header-bg);
-}
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
 
-#chat {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+    .msg {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      white-space: pre-wrap;
+      line-height: 1.45;
+      font-size: 14px;
+    }
 
-.msg {
-  max-width: 85%;
-  padding: 10px 14px;
-  border-radius: 16px;
-  font-size: 15px;
-  white-space: pre-wrap;
-  line-height: 1.45;
-}
+    .msg.user {
+      align-self: flex-end;
+      background: #2563eb;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
 
-.msg.user {
-  align-self: flex-end;
-  background: #2563eb;
-  color: white;
-  border-bottom-right-radius: 4px;
-}
+    body.dark .msg.ai {
+      background: #1e293b;
+      color: #e5e7eb;
+    }
+    body.light .msg.ai {
+      background: #e5e7eb;
+      color: #111827;
+    }
 
-body.light .msg.ai {
-  background: #e5e7eb;
-  color: #111827;
-}
-body.dark .msg.ai {
-  background: #1e293b;
-  color: #e5e7eb;
-}
+    .msg.system {
+      align-self: center;
+      font-size: 12px;
+      opacity: 0.7;
+      background: transparent;
+    }
 
-.msg.system {
-  align-self: center;
-  opacity: 0.7;
-  font-size: 13px;
-}
+    #bottom {
+      padding: 8px;
+      border-top: 1px solid #1f2937;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    body.light #bottom {
+      background: #e5e7eb;
+      border-top-color: #cbd5f5;
+    }
+    body.dark #bottom {
+      background: #020617;
+      border-top-color: #1f2937;
+    }
 
-#bottom {
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--header-bg);
-}
+    #input-row {
+      display: flex;
+      gap: 6px;
+    }
 
-#input-row {
-  display: flex;
-  gap: 6px;
-}
+    #input {
+      flex: 1;
+      padding: 11px;
+      border-radius: 10px;
+      font-size: 14px;
+      border: 1px solid #475569;
+      outline: none;
+      background: transparent;
+      color: inherit;
+    }
+    #input::placeholder {
+      color: #6b7280;
+    }
 
-#input {
-  flex: 1;
-  padding: 12px;
-  border-radius: 10px;
-  font-size: 14px;
-  border: 1px solid #475569;
-  outline: none;
-  background: transparent;
-  color: inherit;
-}
+    button {
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
 
-#sendBtn {
-  background: #2563eb;
-  color: white;
-  border-radius: 10px;
-  padding: 12px 16px;
-  border: none;
-  cursor: pointer;
-}
-#sendBtn:disabled {
-  opacity: 0.5;
-}
+    #sendBtn {
+      padding: 11px 14px;
+      background: #2563eb;
+      color: white;
+      font-size: 14px;
+    }
+    #sendBtn:disabled {
+      opacity: 0.5;
+    }
 
-button.secondary {
-  background: transparent;
-  border: 1px solid #475569;
-  color: inherit;
-  border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-}
+    .secondary {
+      padding: 9px 11px;
+      font-size: 13px;
+      border: 1px solid #475569;
+      background: transparent;
+      color: inherit;
+    }
 
-#tools {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+    #tools {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
 
-label.file-label {
-  padding: 10px 12px;
-  border: 1px dashed #475569;
-  border-radius: 10px;
-  cursor: pointer;
-}
+    .tools-left,
+    .tools-right {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
 
-#imageInput {
-  display: none;
-}
+    label.file-label {
+      border-radius: 10px;
+      padding: 8px 10px;
+      border: 1px dashed #475569;
+      cursor: pointer;
+      font-size: 13px;
+    }
 
-#preview {
-  max-width: 90px;
-  max-height: 60px;
-  border-radius: 6px;
-  display: none;
-  border: 1px solid #475569;
-}
+    #imageInput {
+      display: none;
+    }
 
-#themeToggle {
-  border: none;
-  cursor: pointer;
-  font-size: 18px;
-  background: transparent;
-}
+    #preview {
+      max-width: 90px;
+      max-height: 60px;
+      border-radius: 8px;
+      object-fit: cover;
+      display: none;
+      border: 1px solid #475569;
+    }
 
-#clearBtn {
-  font-size: 12px;
-  padding: 8px 12px;
-}
-</style>
+    #clearBtn {
+      font-size: 12px;
+      padding: 7px 10px;
+    }
+
+    @media (max-width: 480px) {
+      header {
+        font-size: 14px;
+      }
+      .msg {
+        font-size: 13px;
+      }
+      #input {
+        font-size: 13px;
+      }
+      button {
+        font-size: 13px;
+      }
+    }
+  </style>
 </head>
-
 <body class="dark">
-
 <header>
-  <span>ИИ-чат</span>
-  <button id="themeToggle">☀️</button>
+  <span>ИИ-чат (Qwen 0.5B + фото)</span>
+  <button id="themeToggle" title="Тёмная/светлая тема">☀️</button>
 </header>
 
 <div id="chat"></div>
 
 <div id="bottom">
   <div id="input-row">
-    <input id="input" placeholder="Ждите... идёт загрузка ИИ" disabled>
-    <button class="secondary" id="micBtn" disabled>🎤</button>
-    <button id="sendBtn" disabled>➤</button>
+    <input id="input" placeholder="Ждите... ИИ загружается" disabled />
+    <button class="secondary" id="micBtn" disabled title="Голосовой ввод">
+      🎤
+    </button>
+    <button id="sendBtn" disabled title="Отправить">➤</button>
   </div>
 
   <div id="tools">
-    <div class="left">
+    <div class="tools-left">
       <button class="secondary" id="webBtn" disabled>🌐 Интернет</button>
 
       <label class="file-label">
         📷 Фото
-        <input type="file" id="imageInput" accept="image/*">
+        <input type="file" id="imageInput" accept="image/*" />
       </label>
 
-      <img id="preview">
+      <img id="preview" alt="preview" />
     </div>
 
-    <div class="right">
+    <div class="tools-right">
       <button class="secondary" id="ocrBtn" disabled>🔤 OCR</button>
       <button class="secondary" id="visionBtn" disabled>🧠 Фото</button>
       <button class="secondary" id="clearBtn">🗑</button>
@@ -213,349 +264,486 @@ label.file-label {
   </div>
 </div>
 
-<script>
-/* -------------------- ЭЛЕМЕНТЫ --------------------- */
-const body = document.body;
-const chatEl = document.getElementById("chat");
-const input = document.getElementById("input");
-const sendBtn = document.getElementById("sendBtn");
-const micBtn = document.getElementById("micBtn");
-const webBtn = document.getElementById("webBtn");
-const imageInput = document.getElementById("imageInput");
-const preview = document.getElementById("preview");
-const ocrBtn = document.getElementById("ocrBtn");
-const visionBtn = document.getElementById("visionBtn");
-const clearBtn = document.getElementById("clearBtn");
-const themeToggle = document.getElementById("themeToggle");
+<!-- ЛОГИКА -->
+<script type="module">
+  import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0";
 
-/* -------------------- СОСТОЯНИЕ --------------------- */
-let llm = null;
-let llmReady = false;
+  // ---------- ЭЛЕМЕНТЫ ----------
+  const body = document.body;
+  const chatEl = document.getElementById("chat");
+  const inputEl = document.getElementById("input");
+  const sendBtn = document.getElementById("sendBtn");
+  const micBtn = document.getElementById("micBtn");
+  const webBtn = document.getElementById("webBtn");
+  const imageInput = document.getElementById("imageInput");
+  const previewImg = document.getElementById("preview");
+  const ocrBtn = document.getElementById("ocrBtn");
+  const visionBtn = document.getElementById("visionBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const themeToggleBtn = document.getElementById("themeToggle");
 
-let visionModel = null;
-let visionReady = false;
+  // ---------- СОСТОЯНИЕ ----------
+  let textGen = null; // pipeline для Qwen
+  let llmReady = false;
 
-let lastImage = null;
+  let visionModel = null;
+  let visionReady = false;
 
-let recognition = null;
-let speechAvailable = false;
+  let lastImageDataUrl = null;
 
-let history = [];
-const HISTORY_KEY = "chat_history_v2";
-const THEME_KEY = "chat_theme";
+  let recognition = null;
+  let speechAvailable = false;
 
-/* Ключевые слова для авто-режима "фото + задание" */
-const IMAGE_TAGS = ["текст", "номер", "на фото", "картинке", "найди"];
+  let chatHistory = [];
+  const HISTORY_KEY = "ai_chat_history_qwen05_v1";
+  const THEME_KEY = "ai_chat_theme_v1";
 
-/* -------------------- ИСТОРИЯ --------------------- */
-function addMessage(role, text, save = true) {
-  const m = document.createElement("div");
-  m.className = "msg " + role;
-  m.textContent = text;
-  chatEl.appendChild(m);
-  chatEl.scrollTop = chatEl.scrollHeight;
+  const IMAGE_KEYWORDS = [
+    "номер",
+    "текст",
+    "на фото",
+    "на картинке",
+    "на изображении",
+    "найди",
+  ];
 
-  if (save) {
-    history.push({ role, text });
-    saveHistory();
-  }
-}
+  const SYSTEM_PROMPT =
+    "Ты дружелюбный и полезный ИИ-ассистент, отвечаешь по-русски, кратко и по делу.";
 
-function addSystem(text) {
-  addMessage("system", text);
-}
+  // ---------- ИСТОРИЯ ----------
+  function addMessage(role, text, save = true) {
+    const div = document.createElement("div");
+    div.classList.add("msg", role);
+    div.textContent = text;
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
 
-function saveHistory() {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-}
-
-function loadHistory() {
-  const raw = localStorage.getItem(HISTORY_KEY);
-  if (!raw) return;
-  try {
-    history = JSON.parse(raw);
-    history.forEach(m => addMessage(m.role, m.text, false));
-  } catch {}
-}
-
-/* -------------------- ТЕМА --------------------- */
-function applyTheme(t) {
-  body.classList.remove("dark", "light");
-  body.classList.add(t);
-  themeToggle.textContent = t === "dark" ? "☀️" : "🌙";
-  localStorage.setItem(THEME_KEY, t);
-}
-
-function initTheme() {
-  let saved = localStorage.getItem(THEME_KEY);
-  if (!saved) {
-    saved = window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  }
-  applyTheme(saved);
-
-  themeToggle.onclick = () => {
-    applyTheme(body.classList.contains("dark") ? "light" : "dark");
-  };
-}
-
-/* -------------------- БЛОКИРОВКА ВВОДА --------------------- */
-function blockInput() {
-  input.disabled = true;
-  sendBtn.disabled = true;
-  webBtn.disabled = true;
-  ocrBtn.disabled = true;
-  visionBtn.disabled = true;
-  micBtn.disabled = true;
-}
-
-function unblockInput() {
-  input.disabled = false;
-  sendBtn.disabled = false;
-  webBtn.disabled = false;
-  if (speechAvailable) micBtn.disabled = false;
-  if (lastImage) {
-    ocrBtn.disabled = false;
-    if (visionReady) visionBtn.disabled = false;
-  }
-}
-
-/* -------------------- WebLLM --------------------- */
-async function initLLM() {
-  addSystem("Загрузка ИИ модели... Подождите 10–30 секунд.");
-
-  try {
-    llm = await webllm.ChatModule.create("Llama-3-8B-Instruct-q4f32_1");
-    llmReady = true;
-
-    unblockInput();
-    input.placeholder = "Введите сообщение...";
-
-    addMessage("ai", "Модель успешно установлена и готова к работе!");
-
-  } catch (e) {
-    addSystem("Ошибка загрузки LLM: " + e);
-  }
-}
-
-/* -------------------- VISION --------------------- */
-async function initVision() {
-  try {
-    visionModel = await mobilenet.load();
-    visionReady = true;
-    addSystem("Модель распознавания изображений подключена.");
-  } catch {
-    addSystem("Ошибка подключения vision-модели.");
-  }
-}
-
-/* -------------------- WEB SEARCH --------------------- */
-async function webSearch(q) {
-  addMessage("user", "/web " + q);
-  addMessage("ai", "Ищу в интернете...");
-
-  try {
-    const url =
-      "https://api.allorigins.win/get?url=" +
-      encodeURIComponent(
-        "https://duckduckgo.com/html/?q=" + encodeURIComponent(q)
-      );
-
-    const r = await fetch(url);
-    const d = await r.json();
-    const doc = new DOMParser().parseFromString(d.contents, "text/html");
-    const links = [...doc.querySelectorAll("a.result__a")];
-
-    let out = `Результаты поиска для "${q}":\n\n`;
-
-    for (let i = 0; i < Math.min(3, links.length); i++) {
-      out += `${i + 1}. ${links[i].textContent.trim()}\n${links[i].href}\n\n`;
+    if (save) {
+      chatHistory.push({ role, text });
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
     }
-
-    chatEl.lastChild.textContent = out;
-    history[history.length - 1].text = out;
-    saveHistory();
-
-  } catch (e) {
-    chatEl.lastChild.textContent = "Ошибка поиска: " + e;
-  }
-}
-
-webBtn.onclick = () => {
-  const q = input.value.trim();
-  if (q) {
-    input.value = "";
-    webSearch(q);
-  }
-};
-
-/* -------------------- ГОЛОСОВОЙ ВВОД --------------------- */
-function initSpeech() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    addSystem("Голосовой ввод не поддерживается.");
-    return;
   }
 
-  recognition = new SR();
-  recognition.lang = "ru-RU";
-
-  recognition.onresult = e => {
-    input.value = e.results[0][0].transcript;
-  };
-
-  speechAvailable = true;
-}
-
-micBtn.onclick = () => {
-  if (recognition) recognition.start();
-  addSystem("Слушаю...");
-};
-
-/* -------------------- ИЗОБРАЖЕНИЯ --------------------- */
-imageInput.onchange = () => {
-  const f = imageInput.files[0];
-  if (!f) return;
-  const r = new FileReader();
-
-  r.onload = () => {
-    lastImage = r.result;
-    preview.src = lastImage;
-    preview.style.display = "block";
-    ocrBtn.disabled = false;
-    if (visionReady) visionBtn.disabled = false;
-
-    addSystem("Фото загружено. Теперь можно попросить: «найди номер», «прочитай текст».");
-  };
-
-  r.readAsDataURL(f);
-};
-
-/* OCR */
-ocrBtn.onclick = async () => {
-  if (!lastImage) {
-    addSystem("Нет изображения.");
-    return;
+  function addSystem(text, save = true) {
+    addMessage("system", text, save);
   }
 
-  addMessage("user", "Сделай OCR");
-  addMessage("ai", "Читаю текст...");
-
-  const res = await Tesseract.recognize(lastImage, "rus+eng");
-  const text = res.data.text || "Текст не найден.";
-
-  chatEl.lastChild.textContent = text;
-};
-
-/* Vision */
-visionBtn.onclick = async () => {
-  if (!lastImage) return;
-
-  addMessage("user", "Что на фото?");
-  addMessage("ai", "Анализирую...");
-
-  const img = new Image();
-  img.src = lastImage;
-
-  img.onload = async () => {
-    const preds = await visionModel.classify(img);
-    let out = "Вот что я вижу:\n\n";
-    preds.slice(0, 3).forEach((p, i) => {
-      out += `${i + 1}. ${p.className} (${Math.round(p.probability * 100)}%)\n`;
-    });
-    chatEl.lastChild.textContent = out;
-  };
-};
-
-/* -------------------- СЕНД --------------------- */
-async function send() {
-  if (!llmReady) return;
-
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = "";
-
-  addMessage("user", text);
-
-  /* Авто-режим: фото + задание */
-  const matchesImage = lastImage &&
-    IMAGE_TAGS.some(k => text.toLowerCase().includes(k));
-
-  if (matchesImage) {
-    addMessage("ai", "Обрабатываю фото и ваш запрос...");
-
-    let ocrText = "";
+  function loadHistory() {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return;
     try {
-      const r = await Tesseract.recognize(lastImage, "rus+eng");
-      ocrText = r.data.text || "";
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return;
+      chatHistory = arr;
+      arr.forEach((m) => addMessage(m.role, m.text, false));
     } catch {}
-
-    let visionText = "";
-    if (visionReady) {
-      const img = new Image();
-      img.src = lastImage;
-      await new Promise(res => (img.onload = res));
-      try {
-        const preds = await visionModel.classify(img);
-        visionText = preds
-          .slice(0, 3)
-          .map(p => `${p.className} (${Math.round(p.probability * 100)}%)`)
-          .join("\n");
-      } catch {}
-    }
-
-    const prompt = `
-Пользователь загрузил изображение и дал задачу: "${text}"
-
-Распознанный текст:
-${ocrText}
-
-Что видит модель:
-${visionText}
-
-Ответь подробно.`;
-
-    const ans = await llm.generate(prompt);
-    chatEl.lastChild.textContent = ans;
-    return;
   }
 
-  /* Обычный чат */
-  addMessage("ai", "Думаю...");
-
-  const ans = await llm.generate(text);
-  chatEl.lastChild.textContent = ans;
-}
-
-sendBtn.onclick = send;
-input.onkeydown = e => {
-  if (e.key === "Enter") send();
-};
-
-/* -------------------- CLEAR --------------------- */
-clearBtn.onclick = () => {
-  if (confirm("Удалить историю? Действие необратимо.")) {
-    history = [];
+  function clearHistory() {
+    if (!confirm("Очистить чат? Историю нельзя будет восстановить.")) return;
+    chatHistory = [];
     localStorage.removeItem(HISTORY_KEY);
     chatEl.innerHTML = "";
-    addSystem("История очищена.");
+    addSystem("Чат очищен.");
   }
-};
 
-/* -------------------- START --------------------- */
-(function start() {
-  initTheme();
-  loadHistory();
-  blockInput();
+  clearBtn.addEventListener("click", clearHistory);
 
-  addMessage("ai", "Привет! ИИ загружается, подожди немного...");
+  // ---------- ТЕМА ----------
+  function applyTheme(theme) {
+    body.classList.remove("dark", "light");
+    body.classList.add(theme);
+    themeToggleBtn.textContent = theme === "dark" ? "☀️" : "🌙";
+    localStorage.setItem(THEME_KEY, theme);
+  }
 
-  initSpeech();
-  initLLM();
-  initVision();
-})();
+  function initTheme() {
+    let saved = localStorage.getItem(THEME_KEY);
+    if (!saved) {
+      const prefersDark =
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      saved = prefersDark ? "dark" : "light";
+    }
+    applyTheme(saved);
+
+    themeToggleBtn.addEventListener("click", () => {
+      const current = body.classList.contains("dark") ? "dark" : "light";
+      applyTheme(current === "dark" ? "light" : "dark");
+    });
+  }
+
+  // ---------- БЛОКИРОВКА ВВОДА ----------
+  function blockInput() {
+    inputEl.disabled = true;
+    sendBtn.disabled = true;
+    webBtn.disabled = true;
+    ocrBtn.disabled = true;
+    visionBtn.disabled = true;
+    micBtn.disabled = true;
+  }
+
+  function unblockInput() {
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    webBtn.disabled = false;
+    if (speechAvailable) micBtn.disabled = false;
+    if (lastImageDataUrl) {
+      ocrBtn.disabled = false;
+      if (visionReady) visionBtn.disabled = false;
+    }
+  }
+
+  // ---------- QWEN 0.5B CHAT ----------
+  function buildChatPrompt(newUserMessage) {
+    // Собираем историю как ChatML диалог для Qwen
+    let prompt = `<|im_start|>system\n${SYSTEM_PROMPT}\n<|im_end|>\n`;
+
+    chatHistory.forEach((m) => {
+      if (m.role === "user") {
+        prompt += `<|im_start|>user\n${m.text}\n<|im_end|>\n`;
+      } else if (m.role === "ai") {
+        prompt += `<|im_start|>assistant\n${m.text}\n<|im_end|>\n`;
+      }
+    });
+
+    prompt += `<|im_start|>user\n${newUserMessage}\n<|im_end|>\n<|im_start|>assistant\n`;
+    return prompt;
+  }
+
+  async function initLLM() {
+    addSystem(
+      "Загружаю модель Qwen1.5-0.5B-Chat... Это может занять 10–40 секунд."
+    );
+    try {
+      // Модель чата Qwen
+      textGen = await pipeline(
+        "text-generation",
+        "Xenova/Qwen1.5-0.5B-Chat"
+      );
+      llmReady = true;
+      inputEl.placeholder = "Введите сообщение...";
+      unblockInput();
+      addMessage(
+        "ai",
+        "Модель Qwen 0.5B загружена и готова. Можем общаться!"
+      );
+    } catch (e) {
+      addSystem("Ошибка загрузки модели: " + e);
+    }
+  }
+
+  async function generateChatAnswer(userText, extraContext = "") {
+    const base = extraContext
+      ? `${userText}\n\nДополнительные данные:\n${extraContext}`
+      : userText;
+
+    const prompt = buildChatPrompt(base);
+
+    const out = await textGen(prompt, {
+      max_new_tokens: 128,
+      temperature: 0.7,
+      top_p: 0.9,
+    });
+
+    const full = out[0]?.generated_text || "";
+    const split = full.split("<|im_start|>assistant\n");
+    const lastPart = split[split.length - 1];
+    const endSplit = lastPart.split("<|im_end|>")[0];
+    return (endSplit || lastPart || full).trim();
+  }
+
+  // ---------- VISION ----------
+  async function initVision() {
+    try {
+      visionModel = await mobilenet.load();
+      visionReady = true;
+      addSystem("Модель распознавания изображений (MobileNet) загружена.", false);
+      if (lastImageDataUrl) visionBtn.disabled = false;
+    } catch (e) {
+      addSystem("Ошибка загрузки vision-модели: " + e, false);
+    }
+  }
+
+  // ---------- WEB SEARCH ----------
+  async function webSearch(qRaw) {
+    const q = qRaw || inputEl.value.trim();
+    if (!q) return;
+    inputEl.value = "";
+
+    addMessage("user", "/web " + q);
+    addMessage("ai", "Ищу в интернете...");
+
+    try {
+      const url =
+        "https://api.allorigins.win/get?url=" +
+        encodeURIComponent(
+          "https://duckduckgo.com/html/?q=" + encodeURIComponent(q)
+        );
+      const resp = await fetch(url);
+      const data = await resp.json();
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(data.contents, "text/html");
+      const links = Array.from(doc.querySelectorAll("a.result__a"));
+
+      let text = `Результаты поиска по запросу "${q}":\n\n`;
+      for (let i = 0; i < Math.min(3, links.length); i++) {
+        const a = links[i];
+        text += `${i + 1}. ${a.textContent.trim()}\n${a.href}\n\n`;
+      }
+      if (links.length === 0) {
+        text += "Не удалось извлечь результаты (разметка могла измениться).";
+      }
+
+      chatEl.lastChild.textContent = text;
+      chatHistory[chatHistory.length - 1].text = text;
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+    } catch (e) {
+      const errText = "Ошибка поиска: " + e;
+      chatEl.lastChild.textContent = errText;
+      chatHistory[chatHistory.length - 1].text = errText;
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+    }
+  }
+
+  webBtn.addEventListener("click", () => webSearch());
+
+  // ---------- ГОЛОС ----------
+
+  function initSpeech() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      addSystem("Голосовой ввод не поддерживается этим браузером.", false);
+      micBtn.style.display = "none";
+      return;
+    }
+    recognition = new SR();
+    recognition.lang = "ru-RU";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      inputEl.value = text;
+    };
+
+    recognition.onerror = (e) => {
+      addSystem("Ошибка голосового ввода: " + e.error, false);
+    };
+
+    speechAvailable = true;
+  }
+
+  micBtn.addEventListener("click", () => {
+    if (!recognition) return;
+    try {
+      recognition.start();
+      addSystem("Слушаю...");
+    } catch {}
+  });
+
+  // ---------- ИЗОБРАЖЕНИЯ / OCR / VISION ----------
+  imageInput.addEventListener("change", () => {
+    const file = imageInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      lastImageDataUrl = reader.result;
+      previewImg.src = lastImageDataUrl;
+      previewImg.style.display = "block";
+      ocrBtn.disabled = false;
+      if (visionReady) visionBtn.disabled = false;
+      addSystem(
+        'Фото загружено. Можно писать: "найди номер", "прочитай текст", "что на фото".'
+      );
+    };
+    reader.readAsDataURL(file);
+  });
+
+  async function runOCR() {
+    if (!lastImageDataUrl) {
+      addSystem("Сначала загрузи фото.", false);
+      return;
+    }
+    addMessage("user", "Сделай OCR с фото");
+    addMessage("ai", "Читаю текст с изображения...");
+
+    try {
+      const result = await Tesseract.recognize(lastImageDataUrl, "rus+eng");
+      const text =
+        result.data && result.data.text ? result.data.text.trim() : "";
+      const answer = text
+        ? "Распознанный текст:\n" + text
+        : "Текст не найден или распознан плохо.";
+      chatEl.lastChild.textContent = answer;
+      chatHistory[chatHistory.length - 1].text = answer;
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+    } catch (e) {
+      const err = "Ошибка OCR: " + e;
+      chatEl.lastChild.textContent = err;
+      chatHistory[chatHistory.length - 1].text = err;
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+    }
+  }
+
+  async function runVision() {
+    if (!lastImageDataUrl) {
+      addSystem("Сначала загрузи фото.", false);
+      return;
+    }
+    if (!visionReady) {
+      addSystem("Модель для картинок ещё загружается.", false);
+      return;
+    }
+
+    addMessage("user", "Что на фото?");
+    addMessage("ai", "Анализирую изображение...");
+
+    const img = new Image();
+    img.src = lastImageDataUrl;
+    img.onload = async () => {
+      try {
+        const preds = await visionModel.classify(img);
+        let text = "Предположения модели:\n\n";
+        preds.slice(0, 3).forEach((p, i) => {
+          text += `${i + 1}. ${p.className} (${Math.round(
+            p.probability * 100
+          )}%)\n`;
+        });
+        chatEl.lastChild.textContent = text;
+        chatHistory[chatHistory.length - 1].text = text;
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      } catch (e) {
+        const err = "Ошибка анализа изображения: " + e;
+        chatEl.lastChild.textContent = err;
+        chatHistory[chatHistory.length - 1].text = err;
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      }
+    };
+    img.onerror = () => {
+      const err = "Не удалось загрузить картинку для анализа.";
+      chatEl.lastChild.textContent = err;
+      chatHistory[chatHistory.length - 1].text = err;
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+    };
+  }
+
+  ocrBtn.addEventListener("click", runOCR);
+  visionBtn.addEventListener("click", runVision);
+
+  // ---------- ЧАТ + "ФОТО + ЧТО ДЕЛАТЬ" ----------
+  async function handleSend() {
+    if (!llmReady) {
+      addSystem("Модель ещё загружается, подожди немного.", false);
+      return;
+    }
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = "";
+
+    addMessage("user", text);
+
+    // Если есть фото и запрос связан с фото
+    const lower = text.toLowerCase();
+    const refersToImage =
+      lastImageDataUrl &&
+      IMAGE_KEYWORDS.some((k) => lower.includes(k));
+
+    if (refersToImage) {
+      addMessage("ai", "Обрабатываю фото и твой запрос...");
+
+      let ocrText = "";
+      try {
+        const res = await Tesseract.recognize(lastImageDataUrl, "rus+eng");
+        ocrText =
+          res.data && res.data.text ? res.data.text.trim() : "";
+      } catch {}
+
+      let visionSummary = "";
+      if (visionReady) {
+        try {
+          const img = new Image();
+          img.src = lastImageDataUrl;
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          });
+          const preds = await visionModel.classify(img);
+          visionSummary = preds
+            .slice(0, 3)
+            .map(
+              (p, i) =>
+                `${i + 1}. ${p.className} (${Math.round(
+                  p.probability * 100
+                )}%)`
+            )
+            .join("\n");
+        } catch {}
+      }
+
+      const extra =
+        (ocrText ? "Распознанный текст:\n" + ocrText + "\n\n" : "") +
+        (visionSummary
+          ? "Что видит модель:\n" + visionSummary + "\n\n"
+          : "") +
+        'Если человек просит "номер", скорее всего речь о номере или тексте на изображении.';
+
+      try {
+        const answer = await generateChatAnswer(text, extra);
+        chatEl.lastChild.textContent = answer;
+        chatHistory[chatHistory.length - 1].text = answer;
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      } catch (e) {
+        const err = "Ошибка ответа модели: " + e;
+        chatEl.lastChild.textContent = err;
+        chatHistory[chatHistory.length - 1].text = err;
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+      }
+
+      return;
+    }
+
+    // Обычный чат
+    addMessage("ai", "Думаю...");
+    try {
+      const answer = await generateChatAnswer(text);
+      chatEl.lastChild.textContent = answer;
+      chatHistory[chatHistory.length - 1].text = answer;
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+    } catch (e) {
+      const err = "Ошибка ответа модели: " + e;
+      chatEl.lastChild.textContent = err;
+      chatHistory[chatHistory.length - 1].text = err;
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+    }
+  }
+
+  sendBtn.addEventListener("click", handleSend);
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  });
+
+  // ---------- СТАРТ ----------
+  (function start() {
+    initTheme();
+    loadHistory();
+    blockInput();
+
+    if (chatHistory.length === 0) {
+      addMessage(
+        "ai",
+        "Привет! Я ассистент на базе Qwen 0.5B. Сейчас загружаюсь, подожди чуть-чуть, потом можем общаться."
+      );
+    }
+
+    initSpeech();
+    initLLM();
+    initVision();
+  })();
 </script>
-
 </body>
 </html>
