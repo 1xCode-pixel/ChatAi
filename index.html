@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>ChatAi — Phi-3-mini + Фото</title>
+  <title>ChatAi — Qwen2.5-0.5B-Instruct + Фото</title>
 
   <!-- OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -36,7 +36,7 @@
       border-bottom: 1px solid #1f2937;
     }
     body.light header { background: #e5e7eb; border-bottom-color: #cbd5f5; }
-    body.dark header  { background: #020617; border-bottom-color: #1f2937; }
+    body.dark  header { background: #020617; border-bottom-color: #1f2937; }
 
     #themeToggle {
       border: none;
@@ -217,8 +217,10 @@
 </div>
 
 <script type="module">
-  // LLM: Phi-3-mini-4k-instruct через transformers.js
-  import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0";
+  import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+
+  // Чтоб не было странных багов с локальными моделями
+  env.allowLocalModels = false;
 
   // ==== ЭЛЕМЕНТЫ ====
   const body = document.body;
@@ -235,7 +237,7 @@
   const themeToggleBtn = document.getElementById("themeToggle");
 
   // ==== СОСТОЯНИЕ ====
-  let generator = null;       // pipeline() для Phi-3-mini
+  let generator = null;       // pipeline для Qwen2.5-0.5B-Instruct
   let llmReady = false;
   let visionModel = null;
   let visionReady = false;
@@ -243,8 +245,8 @@
   let recognition = null;
   let speechAvailable = false;
 
-  let chatHistory = []; // {role: 'user' | 'ai', text: rawText}
-  const HISTORY_KEY = "chat_history_chatAi_phi3_v1";
+  let chatHistory = []; // {role: 'user'|'ai'|'system', text}
+  const HISTORY_KEY = "chat_history_chatAi_qwen25_v1";
   const THEME_KEY   = "chat_theme_chatAi_v1";
 
   const IMAGE_KEYWORDS = ["номер","текст","на фото","на картинке","на изображении","найди"];
@@ -258,7 +260,7 @@
 - "кто тебя сделал?"
 - "кем ты был создан?"
 - "кто создал ChatAi?"
-- любые похожие вопросы о создателях,
+и любые похожие вопросы про создателей,
 
 ты ВСЕГДА отвечаешь:
 "Меня создала маленькая команда из 1 программиста, 1 дизайнера и одного менеджера — команда 1xCode."
@@ -268,7 +270,7 @@
 Отвечай кратко и по делу, по-русски.
 `;
 
-  // ==== ИСТОРИЯ ====
+  // ==== ИСТОРИЯ / ВЫВОД ====
   function addMessage(role, rawText, save = true) {
     const div = document.createElement("div");
     div.classList.add("msg", role);
@@ -333,7 +335,8 @@
   function initTheme() {
     let saved = localStorage.getItem(THEME_KEY);
     if (!saved) {
-      const prefersDark = window.matchMedia &&
+      const prefersDark =
+        window.matchMedia &&
         window.matchMedia("(prefers-color-scheme: dark)").matches;
       saved = prefersDark ? "dark" : "light";
     }
@@ -364,11 +367,9 @@
     }
   }
 
-  // ==== LLM (Phi-3-mini-4k-instruct как условный чат) ====
+  // ==== LLM (Qwen2.5-0.5B-Instruct quantized) ====
   function buildPrompt(userTextWithExtra) {
-    // Простой текстовый промпт: системные инструкции + история
     let prompt = SYSTEM_PROMPT.trim() + "\n\nДиалог:\n";
-
     for (const m of chatHistory) {
       if (m.role === "user") {
         prompt += `Пользователь: ${m.text}\n`;
@@ -382,13 +383,15 @@
 
   async function initLLM() {
     addSystem("ChatAi загружается…");
-    addSystem("Загружаю модель Phi-3-mini-4k-instruct (это может занять 10–40 секунд)...");
+    addSystem("Загружаю модель Qwen2.5-0.5B-Instruct (квантизированную). Это может занять 10–30 секунд…");
     try {
-      generator = await pipeline("text-generation", "Xenova/Phi-3-mini-4k-instruct");
+      generator = await pipeline("text-generation", "Xenova/Qwen2.5-0.5B-Instruct", {
+        quantized: true,
+      });
       llmReady = true;
       inputEl.placeholder = "Напишите сообщение для ChatAi...";
       unblockInput();
-      addMessage("ai", "Привет! Я ChatAi — твой ИИ-ассистент. Модель загружена, можем общаться!");
+      addMessage("ai", "Привет! Я ChatAi — твой ИИ-ассистент. Модель загружена, можно общаться!");
     } catch (e) {
       addSystem("Ошибка загрузки модели: " + e);
     }
@@ -398,12 +401,11 @@
     const combined = extra ? `${rawUserText}\n\n${extra}` : rawUserText;
     const prompt = buildPrompt(combined);
     const out = await generator(prompt, {
-      max_new_tokens: 180,
+      max_new_tokens: 160,
       temperature: 0.7,
-      top_p: 0.9
+      top_p: 0.9,
     });
     const full = out[0]?.generated_text || "";
-    // вырезаем всё до последнего "ChatAi:" если есть
     const idx = full.lastIndexOf("ChatAi:");
     let answer = idx !== -1 ? full.slice(idx + "ChatAi:".length) : full;
     return answer.trim() || "Не знаю, что ответить.";
@@ -427,8 +429,8 @@
     const q = qRaw || inputEl.value.trim();
     if (!q) return;
     inputEl.value = "";
-    addMessage("user", q);
 
+    addMessage("user", q);
     addMessage("ai", "Секунду, ищу информацию в интернете…");
 
     try {
@@ -447,10 +449,9 @@
         text += `${i + 1}. ${a.textContent.trim()}\n${a.href}\n\n`;
       }
       if (links.length === 0) {
-        text += "Не удалось извлечь результаты (страница могла изменить разметку).";
+        text += "Не удалось извлечь результаты (разметка страницы могла измениться).";
       }
 
-      // заменить последнюю реплику ChatAi
       const last = chatEl.lastChild;
       if (last && last.classList.contains("ai")) {
         last.textContent = "ChatAi: " + text;
@@ -544,6 +545,7 @@
       }
     }
   }
+
   async function runVision() {
     if (!lastImageDataUrl) {
       addSystem("Сначала загрузи фото.", false);
@@ -635,7 +637,7 @@
       const extra =
         (ocrText ? "Распознанный текст на изображении:\n"+ocrText+"\n\n" : "")+
         (visionSummary ? "Распознанные объекты:\n"+visionSummary+"\n\n" : "")+
-        'Если я прошу "номер", речь обычно о номере или тексте на картинке.';
+        'Если пользователь просит "номер", речь обычно о номере или тексте на картинке.';
 
       try {
         const answer = await generateAnswer(rawText, extra);
@@ -718,7 +720,7 @@
 
     if (chatHistory.length === 0) {
       addSystem("ChatAi загружается…");
-      addSystem("Загружаю мозг (Phi-3-mini-4k-instruct) и модули картинок…");
+      addSystem("Загружаю мозг (Qwen2.5-0.5B-Instruct, quantized) и модули картинок…");
     }
 
     initSpeech();
