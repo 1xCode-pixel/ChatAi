@@ -1,26 +1,50 @@
+<script src="https://js.puter.com/v2/"></script>
+``` :contentReference[oaicite:1]{index=1}  
+
+---
+
+## 💡 Как это будет работать
+
+- На **ПК** будет использоваться модель  
+  `openrouter:meta-llama/llama-3.3-70b-instruct:free` :contentReference[oaicite:2]{index=2}  
+  (сверхмощная)
+- На **телефоне** —  
+  `openrouter:meta-llama/llama-3.3-8b-instruct:free` :contentReference[oaicite:3]{index=3}  
+  (лёгкая, быстрая)
+
+Puter.js сам решает всё с токенами и OpenRouter — тебе ничего настраивать не нужно.
+
+---
+
+## 🔧 Что тебе делать
+
+1. Открой свой репозиторий `ChatAi` на GitHub.
+2. В корне, где лежит `index.html`, **замени его содержимое** на код ниже.
+3. Запушь изменения (или отредактируй файл прямо в GitHub Web UI).
+4. Открой ещё раз:  
+   `https://1xcode-pixel.github.io/ChatAi/`
+
+---
+
+## ✅ Готовый `index.html` для твоего ChatAi (Puter + OpenRouter, без ключей)
+
+```html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>ChatAi — Tiny LLM + Фото (Yandex)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ChatAi — LLaMA 3.3 (free, no key)</title>
 
-  <!-- OCR -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
-  <!-- Vision -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
-
-  <!-- Tiny LLM — transformers.js UMD -->
-  <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"></script>
+  <!-- Puter.js: даёт доступ к моделям OpenRouter без ключей -->
+  <script src="https://js.puter.com/v2/"></script>
 
   <style>
     :root { color-scheme: dark light; }
 
     body {
       margin: 0;
-      font-family: system-ui, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       display: flex;
       flex-direction: column;
       height: 100vh;
@@ -35,17 +59,15 @@
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid #1f2937;
-      font-weight: 600;
       font-size: 14px;
+      font-weight: 600;
     }
-    body.light header { background: #e5e7eb; border-bottom-color: #cbd5f5; }
-    body.dark header  { background: #020617; border-bottom-color: #1f2937; }
 
     #themeToggle {
       border: none;
       background: transparent;
       cursor: pointer;
-      font-size: 18px;
+      font-size: 20px;
     }
 
     #chat {
@@ -69,16 +91,16 @@
     .msg.user {
       align-self: flex-end;
       background: #2563eb;
-      color: white;
+      color: #fff;
       border-bottom-right-radius: 4px;
-      box-shadow: 0 2px 4px rgba(15,23,42,.5);
+      box-shadow: 0 2px 4px rgba(15,23,42,.45);
     }
 
     .msg.ai {
       align-self: flex-start;
       background: #1e293b;
-      color: white;
-      box-shadow: 0 2px 4px rgba(15,23,42,.5);
+      color: #e5e7eb;
+      box-shadow: 0 2px 4px rgba(15,23,42,.45);
     }
     body.light .msg.ai {
       background: #e5e7eb;
@@ -88,15 +110,15 @@
 
     .msg.system {
       align-self: center;
-      opacity: .8;
       font-size: 12px;
+      opacity: 0.8;
       background: transparent;
       padding: 4px 8px;
     }
 
     .msg.error {
       border: 1px solid #dc2626;
-      background: rgba(220,38,38,0.1);
+      background: rgba(220,38,38,0.12);
       color: #fecaca;
     }
     body.light .msg.error {
@@ -106,15 +128,14 @@
 
     .typing-dot {
       display:inline-block;
-      width:4px;
-      height:4px;
+      width:4px; height:4px;
       margin:0 1px;
       border-radius:999px;
       background: currentColor;
       animation: bounce 1s infinite;
     }
-    .typing-dot:nth-child(2) { animation-delay: .2s; }
-    .typing-dot:nth-child(3) { animation-delay: .4s; }
+    .typing-dot:nth-child(2){ animation-delay:.2s; }
+    .typing-dot:nth-child(3){ animation-delay:.4s; }
 
     @keyframes bounce {
       0%,80%,100% { transform: translateY(0); opacity:.4; }
@@ -125,60 +146,50 @@
       padding: 8px;
       border-top: 1px solid #1f2937;
     }
-    body.light #bottom { background: #e5e7eb; border-top-color: #cbd5f5; }
-    body.dark  #bottom { background: #020617; border-top-color: #1f2937; }
+
+    #input-row {
+      display:flex;
+      gap:6px;
+      margin-bottom:6px;
+    }
 
     #input {
-      width: 100%;
-      padding: 11px;
-      border-radius: 10px;
-      border: 1px solid #475569;
-      background: transparent;
-      color: inherit;
-      font-size: 14px;
-      box-sizing: border-box;
+      flex:1;
+      padding:11px;
+      border-radius:10px;
+      border:1px solid #475569;
+      background:transparent;
+      color:inherit;
+      font-size:14px;
     }
     #input::placeholder { color:#6b7280; }
 
-    #tools {
-      margin-top: 6px;
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 6px;
-      align-items: center;
-    }
-
     button {
-      border-radius: 10px;
-      border: none;
-      padding: 8px 12px;
-      cursor: pointer;
-      font-size: 13px;
+      border-radius:10px;
+      border:none;
+      padding:8px 12px;
+      cursor:pointer;
+      font-size:13px;
       display:inline-flex;
       align-items:center;
+      justify-content:center;
       gap:4px;
     }
 
-    .secondary {
-      border: 1px solid #475569;
-      background: transparent;
-      color: inherit;
-    }
-
     #sendBtn {
-      background: #2563eb;
-      color: white;
+      background:#2563eb;
+      color:white;
     }
     #sendBtn:disabled { opacity:.5; }
 
-    #preview {
-      width: 80px;
-      height: 60px;
-      border-radius: 8px;
-      object-fit: cover;
-      display: none;
-      border: 1px solid #475569;
+    .secondary {
+      border:1px solid #475569;
+      background:transparent;
+      color:inherit;
+    }
+
+    #webBtn {
+      margin-right:6px;
     }
 
     @media (max-width:480px){
@@ -189,335 +200,123 @@
     }
   </style>
 </head>
+
 <body class="dark">
 <header>
-  <span>ChatAi — Tiny (офлайн)</span>
+  <span id="title">ChatAi — подключаюсь…</span>
   <button id="themeToggle">☀️</button>
 </header>
 
 <div id="chat"></div>
 
 <div id="bottom">
-  <input id="input" placeholder="ChatAi загружается..." disabled />
-
-  <div id="tools">
-    <button class="secondary" id="micBtn" disabled>🎤</button>
-    <button class="secondary" id="webBtn" disabled>🌐</button>
-
-    <label class="secondary" style="padding:8px;cursor:pointer;">
-      📷 Фото
-      <input type="file" id="imageInput" accept="image/*" style="display:none;" />
-    </label>
-
-    <button class="secondary" id="ocrBtn" disabled>🔤</button>
-    <button class="secondary" id="visionBtn" disabled>🧠</button>
-
+  <div id="input-row">
+    <input id="input" placeholder="ChatAi загружается…" disabled />
+    <button class="secondary" id="micBtn" disabled title="Голосовой ввод">🎤</button>
     <button id="sendBtn" disabled>➤</button>
   </div>
-
-  <img id="preview" />
+  <button class="secondary" id="webBtn" disabled>🌐 Интернет-поиск</button>
 </div>
 
 <script>
-/* ==============================
-   Tiny ChatAi на TinyLlama
-   + анимация печати
-   + вибрация
-   + плавный скролл
-============================== */
+/* ============ МОДЕЛИ ============ */
+// Meta LLaMA 3.3 70B / 8B через OpenRouter, но без ключа — через Puter.js :contentReference[oaicite:4]{index=4}
+const MODEL_PC     = "openrouter:meta-llama/llama-3.3-70b-instruct:free";
+const MODEL_MOBILE = "openrouter:meta-llama/llama-3.3-8b-instruct:free";
 
-const MODEL_NAME = "Xenova/TinyLlama-1.1B-Chat-v1";
+const isMobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+const CURRENT_MODEL = isMobile ? MODEL_MOBILE : MODEL_PC;
 
-let generator = null;
-let llmReady = false;
-let lastImage = null;
-let visionModel = null;
-let visionReady = false;
-let recognition = null;
-let speechAvailable = false;
-let chat = [];
-const KEY = "chatai_tiny_history_v2";
-
+/* ============ DOM ============ */
 const chatEl   = document.getElementById("chat");
 const inputEl  = document.getElementById("input");
 const sendBtn  = document.getElementById("sendBtn");
-const ocrBtn   = document.getElementById("ocrBtn");
-const visionBtn= document.getElementById("visionBtn");
-const webBtn   = document.getElementById("webBtn");
 const micBtn   = document.getElementById("micBtn");
-const preview  = document.getElementById("preview");
+const webBtn   = document.getElementById("webBtn");
 const themeBtn = document.getElementById("themeToggle");
+const titleEl  = document.getElementById("title");
 
-/* ====== helperы ====== */
+/* ============ STATE ============ */
+let chatHistory = []; // {role:"user"|"assistant", text}
+const HISTORY_KEY = "chatai_puter_history_v1";
+let recognition = null;
 
-function vibrate(ms){
-  try{
-    if(navigator.vibrate) navigator.vibrate(ms);
-  }catch(e){}
-}
+/* ============ HELPERS ============ */
+function vibrate(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){} }
+function scrollBottom(){ chatEl.scrollTop = chatEl.scrollHeight; }
 
-function scrollBottom(){
-  try{
-    chatEl.scrollTo({top: chatEl.scrollHeight, behavior: "smooth"});
-  }catch(e){
-    chatEl.scrollTop = chatEl.scrollHeight;
-  }
-}
-
-function add(role, text, save=true, extraClass){
+function addMessage(role, text, {save=true, extraClass} = {}){
   const div = document.createElement("div");
   div.classList.add("msg", role);
   if(extraClass) div.classList.add(extraClass);
 
-  let display =
-    role==="ai"   ? "ChatAi: "+text :
-    role==="user" ? "Вы: "+text :
-    text;
+  let display = text;
+  if(role==="ai")   display = "ChatAi: " + text;
+  if(role==="user") display = "Вы: " + text;
 
   div.textContent = display;
   chatEl.appendChild(div);
   scrollBottom();
 
   if(save){
-    chat.push({role,text});
-    try{ localStorage.setItem(KEY, JSON.stringify(chat)); }catch(e){}
+    if(role==="ai" || role==="user"){
+      const mapped = role==="ai" ? "assistant" : "user";
+      chatHistory.push({role:mapped, text});
+      try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory)); }catch(e){}
+    }else{
+      // system — в историю не пишем
+    }
   }
   return div;
 }
 
-function addSystem(text, save=true){
-  return add("system", text, save);
-}
+function addSystem(text, opts){ return addMessage("system", text, opts); }
 
-function loadHistory(){
-  const raw = localStorage.getItem(KEY);
+(function loadHistory(){
+  let raw = null;
+  try{ raw = localStorage.getItem(HISTORY_KEY); }catch(e){}
   if(!raw) return;
   try{
     const arr = JSON.parse(raw);
-    chat = arr;
-    arr.forEach(m=>add(m.role, m.text, false));
+    if(!Array.isArray(arr)) return;
+    chatHistory = arr;
+    arr.forEach(m=>{
+      if(m.role==="assistant") addMessage("ai", m.text, {save:false});
+      else if(m.role==="user") addMessage("user", m.text, {save:false});
+    });
   }catch(e){
-    addSystem("Ошибка истории: "+e,false);
+    addSystem("Ошибка истории: "+e, {save:false});
   }
-}
+})();
 
-/* ====== тема ====== */
+/* ============ Тема ============ */
 const THEME_KEY = "chatai_theme_v1";
-
-function applyTheme(t){
+(function initTheme(){
+  let t = "dark";
+  try{
+    const saved = localStorage.getItem(THEME_KEY);
+    if(saved) t = saved;
+    else if(window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches){
+      t = "light";
+    }
+  }catch(e){}
   document.body.classList.remove("dark","light");
   document.body.classList.add(t);
   themeBtn.textContent = t==="dark" ? "☀️" : "🌙";
-  try{ localStorage.setItem(THEME_KEY,t); }catch(e){}
-}
-
-(function initTheme(){
-  let t = null;
-  try{ t = localStorage.getItem(THEME_KEY); }catch(e){}
-  if(!t){
-    let prefersDark = false;
-    try{
-      prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    }catch(e){}
-    t = prefersDark ? "dark" : "light";
-  }
-  applyTheme(t);
 })();
-
 themeBtn.onclick = ()=>{
   const cur = document.body.classList.contains("dark") ? "dark" : "light";
-  applyTheme(cur==="dark" ? "light" : "dark");
+  const next = cur==="dark" ? "light" : "dark";
+  document.body.classList.remove("dark","light");
+  document.body.classList.add(next);
+  themeBtn.textContent = next==="dark" ? "☀️" : "🌙";
+  try{ localStorage.setItem(THEME_KEY,next); }catch(e){}
 };
 
-/* ====== промпт ====== */
-
-function buildPrompt(userText){
-  let p =
-`Ты — ChatAi. Дружелюбный русскоязычный ИИ.
-
-Если спрашивают кто тебя создал — всегда отвечай:
-"Меня создала маленькая команда из 1 программиста, 1 дизайнера и одного менеджера — команда 1xCode."
-
-Отвечай кратко и по делу.
-
-Диалог:
-`;
-  chat.forEach(m=>{
-    if(m.role==="user") p+=`Пользователь: ${m.text}\n`;
-    if(m.role==="ai")   p+=`ChatAi: ${m.text}\n`;
-  });
-  p+=`Пользователь: ${userText}\nChatAi:`;
-  return p;
-}
-
-/* ====== typing animation ====== */
-function typeText(div, full, done){
-  const prefix = "ChatAi: ";
-  const clean = full;
-  let i = 0;
-  div.textContent = prefix;
-  const id = setInterval(()=>{
-    if(i >= clean.length){
-      clearInterval(id);
-      if(done) done();
-      return;
-    }
-    div.textContent = prefix + clean.slice(0,i+1);
-    i++;
-    scrollBottom();
-  }, 18); // скорость печати
-}
-
-/* ====== LLM ====== */
-async function initLLM(){
-  addSystem("ChatAi загружается…",false);
-  addSystem("Загружаю TinyLlama для ChatAi…",false);
-
-  if(!window.transformers){
-    add("system","❗ Ошибка: библиотека transformers.js не загрузилась.",true,"error");
-    return;
-  }
-
-  vibrate(20);
-
-  try{
-    const t = window.transformers;
-    const pipe = await t.pipeline("text-generation", MODEL_NAME, {quantized:true});
-    generator = pipe;
-    llmReady = true;
-    inputEl.disabled = false;
-    sendBtn.disabled = false;
-    webBtn.disabled = false;
-    add("ai","Привет! Я ChatAi. Моя tiny-модель загружена — давай общаться!");
-    inputEl.placeholder = "Напиши сообщение...";
-  }catch(e){
-    add("system","❗ Ошибка загрузки tiny модели: "+e,true,"error");
-  }
-}
-
-async function askLLM(userText){
-  const prompt = buildPrompt(userText);
-  try{
-    const out = await generator(prompt,{
-      max_new_tokens: 120,
-      temperature: 0.7,
-      top_p: 0.9
-    });
-    let full = out[0].generated_text || "";
-    const idx = full.lastIndexOf("ChatAi:");
-    let ans = idx!==-1 ? full.slice(idx+7) : full;
-    ans = ans.trim();
-    if(!ans) ans = "Не знаю, что ответить.";
-    return ans;
-  }catch(e){
-    return "Ошибка ответа: "+e;
-  }
-}
-
-/* ====== Vision ====== */
-
-async function initVision(){
-  try{
-    addSystem("Гружу Vision-модель…",false);
-    visionModel = await mobilenet.load();
-    visionReady = true;
-    addSystem("Vision готов.",false);
-  }catch(e){
-    add("system","Ошибка Vision: "+e,true,"error");
-  }
-}
-
-/* ====== OCR ====== */
-
-async function runOCR(){
-  if(!lastImage){ addSystem("Сначала загрузи фото."); return; }
-  add("user","Сделай OCR (прочитай текст)");
-  const aiDiv = add("ai","Читаю текст…");
-  try{
-    const r = await Tesseract.recognize(lastImage,"rus+eng");
-    const txt = r.data.text.trim() || "Текст не найден или распознан плохо.";
-    // сохраняем в истории
-    chat[chat.length-1].text = txt;
-    aiDiv.textContent = "ChatAi: "+txt;
-    vibrate(15);
-  }catch(e){
-    const msg = "Ошибка OCR: "+e;
-    chat[chat.length-1].text = msg;
-    aiDiv.textContent = "ChatAi: "+msg;
-    vibrate(40);
-  }
-}
-
-/* ====== Vision run ====== */
-async function runVision(){
-  if(!lastImage){ addSystem("Сначала загрузи фото."); return; }
-  if(!visionReady){ addSystem("Vision ещё загружается…"); return; }
-
-  add("user","Что на фото?");
-  const aiDiv = add("ai","Анализирую…");
-  const img = new Image();
-  img.src = lastImage;
-  img.onload = async ()=>{
-    try{
-      const preds = await visionModel.classify(img);
-      const txt = preds.slice(0,3)
-        .map((p,i)=>`${i+1}. ${p.className} (${Math.round(p.probability*100)}%)`)
-        .join("\n") || "Не удалось распознать объекты.";
-      chat[chat.length-1].text = txt;
-      aiDiv.textContent = "ChatAi: "+txt;
-      vibrate(15);
-    }catch(e){
-      const msg = "Ошибка анализа изображения: "+e;
-      chat[chat.length-1].text = msg;
-      aiDiv.textContent = "ChatAi: "+msg;
-      vibrate(40);
-    }
-  };
-  img.onerror = ()=>{
-    const msg = "Не удалось загрузить картинку для анализа.";
-    chat[chat.length-1].text = msg;
-    aiDiv.textContent = "ChatAi: "+msg;
-    vibrate(40);
-  };
-}
-
-/* ====== Web search ====== */
-async function webSearch(){
-  const q = inputEl.value.trim();
-  if(!q) return;
-  inputEl.value = "";
-
-  add("user",q);
-  const aiDiv = add("ai","Ищу в интернете…");
-  vibrate(15);
-
-  try{
-    const url = "https://api.allorigins.win/get?url=" +
-      encodeURIComponent("https://duckduckgo.com/html/?q="+encodeURIComponent(q));
-    const r = await fetch(url);
-    const j = await r.json();
-    const doc = new DOMParser().parseFromString(j.contents,"text/html");
-    const a = doc.querySelectorAll("a.result__a");
-    let txt = "";
-    for(let i=0;i<3 && i<a.length;i++){
-      txt += `${i+1}. ${a[i].textContent.trim()}\n${a[i].href}\n\n`;
-    }
-    if(!txt) txt = "Ничего не удалось найти или изменилась разметка страницы.";
-
-    chat[chat.length-1].text = txt;
-    aiDiv.textContent = "ChatAi: "+txt;
-  }catch(e){
-    const msg = "Ошибка поиска: "+e;
-    chat[chat.length-1].text = msg;
-    aiDiv.textContent = "ChatAi: "+msg;
-    vibrate(40);
-  }
-}
-
-/* ====== ГОЛОС ====== */
-function initSpeech(){
+/* ============ Голосовой ввод ============ */
+(function initSpeech(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR){ micBtn.style.display="none"; return; }
+  if(!SR){ micBtn.style.display = "none"; return; }
   recognition = new SR();
   recognition.lang = "ru-RU";
   recognition.interimResults = false;
@@ -525,94 +324,152 @@ function initSpeech(){
     inputEl.value = e.results[0][0].transcript;
   };
   recognition.onerror = e=>{
-    addSystem("Ошибка голосового ввода: "+e.error,false);
+    addSystem("Ошибка микрофона: "+e.error, {save:false});
   };
-  speechAvailable=true;
-  micBtn.disabled=false;
-}
-
+  micBtn.disabled = false;
+})();
 micBtn.onclick = ()=>{
   if(!recognition) return;
   try{
     recognition.start();
-    addSystem("ChatAi слушает…",false);
+    addSystem("Слушаю…", {save:false});
   }catch(e){
-    addSystem("Ошибка запуска микрофона: "+e,false);
+    addSystem("Не удалось запустить распознавание: "+e, {save:false});
   }
 };
 
-/* ====== IMAGE ====== */
-imageInput.onchange = ()=>{
-  const f = imageInput.files[0];
-  if(!f) return;
-  const r = new FileReader();
-  r.onload = ()=>{
-    lastImage = r.result;
-    preview.src = lastImage;
-    preview.style.display="block";
-    ocrBtn.disabled=false;
-    visionBtn.disabled=false;
-    addSystem('Фото загружено. Можешь попросить "найди номер", "прочитай текст" или "что на фото".',false);
-    vibrate(15);
-  };
-  r.readAsDataURL(f);
-};
+/* ============ Построение промпта ============ */
+function buildPrompt(userText){
+  let p = `
+Ты — ChatAi, дружелюбный русскоязычный ИИ-ассистент.
 
-/* ====== SEND (с анимацией печати) ====== */
+Если спрашивают, кто тебя создал, всегда отвечай:
+"Меня создала маленькая команда из 1 программиста, 1 дизайнера и одного менеджера — команда 1xCode."
+
+Отвечай кратко и по делу, по-русски.
+
+Диалог:
+`.trim()+"\n\n";
+
+  chatHistory.forEach(m=>{
+    if(m.role==="user")      p += "Пользователь: " + m.text + "\n";
+    else if(m.role==="assistant") p += "ChatAi: " + m.text + "\n";
+  });
+
+  p += "Пользователь: " + userText + "\nChatAi:";
+  return p;
+}
+
+/* ============ Вызов Puter.js / OpenRouter ============ */
+async function callModel(userText){
+  if(!window.puter || !puter.ai || !puter.ai.chat){
+    throw new Error("Puter.js не загрузился (js.puter.com недоступен).");
+  }
+  const prompt = buildPrompt(userText);
+  // простой режим: получаем весь текст сразу
+  const answer = await puter.ai.chat(prompt, {
+    model: CURRENT_MODEL
+  });
+  return String(answer || "").trim() || "Не знаю, что ответить.";
+}
+
+/* ============ Анимация печати ============ */
+function typeText(div, full, done){
+  const prefix = "ChatAi: ";
+  let i = 0;
+  const clean = full;
+  const id = setInterval(()=>{
+    if(i >= clean.length){
+      div.textContent = prefix + clean;
+      clearInterval(id);
+      if(done) done();
+      return;
+    }
+    div.textContent = prefix + clean.slice(0, i+1);
+    i++;
+    scrollBottom();
+  }, 18);
+}
+
+/* ============ Отправка сообщения ============ */
 async function handleSend(){
-  if(!llmReady){
-    addSystem("Модель ещё загружается, подожди чуть-чуть.");
-    vibrate(30);
-    return;
-  }
   const text = inputEl.value.trim();
   if(!text) return;
   inputEl.value = "";
   vibrate(20);
 
-  add("user",text);
+  addMessage("user", text);
 
-  // создаём "печатает..."
-  const aiDiv = document.createElement("div");
-  aiDiv.classList.add("msg","ai");
-  aiDiv.innerHTML = 'ChatAi: <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
-  chatEl.appendChild(aiDiv);
+  const typing = document.createElement("div");
+  typing.classList.add("msg","ai");
+  typing.innerHTML = 'ChatAi: <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+  chatEl.appendChild(typing);
   scrollBottom();
 
-  // ИИ отвечает
-  const answer = await askLLM(text);
-
-  // сохраняем в историю
-  chat.push({role:"ai", text: answer});
-  try{ localStorage.setItem(KEY, JSON.stringify(chat)); }catch(e){}
-
-  // анимация печати
-  typeText(aiDiv, answer, ()=>vibrate(10));
+  try{
+    const answer = await callModel(text);
+    chatHistory.push({role:"assistant", text:answer});
+    try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory)); }catch(e){}
+    typeText(typing, answer, ()=>vibrate(10));
+  }catch(e){
+    typing.textContent = "ChatAi: Ошибка: " + e.message;
+    typing.classList.add("error");
+    vibrate(60);
+  }
 }
 
-/* ====== события ====== */
-sendBtn.onclick = handleSend;
-ocrBtn.onclick  = runOCR;
-visionBtn.onclick = runVision;
-webBtn.onclick  = webSearch;
+/* ============ Интернет-поиск ============ */
+webBtn.onclick = async()=>{
+  const q = prompt("Что найти в интернете?");
+  if(!q) return;
+  addMessage("user", "Найди в интернете: " + q);
+  const aiDiv = addMessage("ai", "Ищу…");
 
-inputEl.addEventListener("keydown",e=>{
+  try{
+    const url = "https://api.allorigins.win/get?url="+
+      encodeURIComponent("https://duckduckgo.com/html/?q="+encodeURIComponent(q));
+    const r = await fetch(url);
+    const j = await r.json();
+    const doc = new DOMParser().parseFromString(j.contents, "text/html");
+    const links = doc.querySelectorAll("a.result__a");
+    let out = "";
+    for(let i=0;i<3 && i<links.length;i++){
+      out += `${i+1}. ${links[i].textContent.trim()}\n${links[i].href}\n\n`;
+    }
+    if(!out) out = "Ничего не смог найти.";
+    aiDiv.textContent = "ChatAi: " + out;
+    chatHistory.push({role:"assistant", text:out});
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(chatHistory));
+  }catch(e){
+    const msg = "Ошибка поиска: "+e;
+    aiDiv.textContent = "ChatAi: " + msg;
+  }
+};
+
+/* ============ События UI ============ */
+sendBtn.onclick = handleSend;
+inputEl.addEventListener("keydown", e=>{
   if(e.key==="Enter" && !e.shiftKey){
     e.preventDefault();
     handleSend();
   }
 });
 
-/* ====== START ====== */
+/* ============ Старт ============ */
 window.onload = ()=>{
-  loadHistory();
-  addSystem("ChatAi загружается…", chat.length === 0);
-  initSpeech();
-  initLLM();
-  initVision();
+  const label = isMobile ? "LLaMA 3.3 8B (мобильная, free)" : "LLaMA 3.3 70B (ПК, free)";
+  titleEl.textContent = "ChatAi — " + label;
+  addSystem("Модель: " + label, {save: chatHistory.length === 0});
+
+  inputEl.disabled = false;
+  sendBtn.disabled = false;
+  webBtn.disabled = false;
+  inputEl.placeholder = "Напиши сообщение для ChatAi…";
+
+  if(chatHistory.length === 0){
+    addMessage("ai", "Привет! Я ChatAi. Я работаю через Puter + OpenRouter без ключей. Спроси меня о чём-нибудь 🙂");
+  }
 };
 </script>
 </body>
 </html>
-
-
