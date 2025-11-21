@@ -197,7 +197,7 @@
 <script>
   // ⚠ СЮДА ВСТАВЬ НОВЫЙ КЛЮЧ OpenRouter
   // Например: sk-or-v1-xxxxxxxxxxxxxx
-  const OPENROUTER_API_KEY = "YOUR_OPENROUTER_KEY_HERE";
+  const OPENROUTER_API_KEY = "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";
 
   // Модели (можешь поменять на другие из OpenRouter)
   const MODEL_PC     = "meta-llama/Meta-Llama-3.1-70B-Instruct";
@@ -345,7 +345,7 @@
 
   // Вызов OpenRouter
   async function callOpenRouter(userText){
-    if(!OPENROUTER_API_KEY || OPENROUTER_API_KEY === "YOUR_OPENROUTER_KEY_HERE"){
+    if(!OPENROUTER_API_KEY || OPENROUTER_API_KEY === "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"){
       throw new Error("API ключ OpenRouter не задан в коде.");
     }
 
@@ -481,7 +481,7 @@
     inputEl.placeholder = "Напиши сообщение для ChatAi…";
 
     if(chatHistory.length === 0){
-      addMessage("ai","Привет! Я ChatAi. Я подключён к OpenRouter и готов помогать 🙂");
+      addMessage("ai","Привет! Я ChatAi.");
     }
   };
 </script>
