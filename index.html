@@ -197,7 +197,7 @@
 <script>
   // ⚠ СЮДА ВСТАВЬ НОВЫЙ КЛЮЧ OpenRouter
   // Например: sk-or-v1-xxxxxxxxxxxxxx
-  const OPENROUTER_API_KEY = "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";
+  const OPENROUTER_API_KEY = "https://chatai-proxy.a8187127.workers.dev/";
 
   // Модели (можешь поменять на другие из OpenRouter)
   const MODEL_PC     = "meta-llama/Meta-Llama-3.1-70B-Instruct";
@@ -345,7 +345,7 @@
 
   // Вызов OpenRouter
   async function callOpenRouter(userText){
-    if(!OPENROUTER_API_KEY || OPENROUTER_API_KEY === "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"){
+    if(!OPENROUTER_API_KEY || OPENROUTER_API_KEY === "https://chatai-proxy.a8187127.workers.dev/"){
       throw new Error("API ключ OpenRouter не задан в коде.");
     }
 
@@ -470,7 +470,7 @@
       addSystem("Использую модель: " + label);
     }
 
-    if(!OPENROUTER_API_KEY || OPENROUTER_API_KEY === "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"){
+    if(!OPENROUTER_API_KEY || OPENROUTER_API_KEY === "https://chatai-proxy.a8187127.workers.dev/"){
       addSystem("❗ Вставь свой API ключ OpenRouter в константу OPENROUTER_API_KEY в коде.", {extraClass:"error"});
       return;
     }
